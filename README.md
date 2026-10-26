@@ -51,14 +51,14 @@ artifact built for another host identity.
 
 | Plugin | DKIM2 draft | Built and tested against |
 |--------|-------------|--------------------------|
-| 0.2.0 | `draft-ietf-dkim-dkim2-spec-07` | Nauthilus `v4.0.1` (default `CORE_REF`); deployment target `v4.0.2` |
+| 0.2.0 | `draft-ietf-dkim-dkim2-spec-07` | Nauthilus `v4.0.2` (default `CORE_REF`) |
 | 0.1.0 | `draft-ietf-dkim-dkim2-spec-06` | bundled in Nauthilus up to `v4.0.1` |
 
 ## Quick start
 
 ```sh
-# Tests (go test -race), vet, golangci-lint and gofmt inside a v4.0.1 tree
-make check CORE_REPO=/path/to/nauthilus CORE_REF=v4.0.1
+# Tests (go test -race), vet, golangci-lint and gofmt inside a v4.0.2 tree
+make check CORE_REPO=/path/to/nauthilus CORE_REF=v4.0.2
 
 # Release build with ABI check, checksum and minisign signature
 make sign CORE_REPO=/path/to/nauthilus CORE_REF=v4.0.2 \
@@ -172,8 +172,8 @@ printed, copied into the build tree or committed.
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `CORE_REPO` | `$(HOME)/GoLandProjects/nauthilus` | Local core repository (read-only; mounted at `/core` for Docker targets). |
-| `CORE_REF` | `v4.0.1` | Exact core tag or commit; the deployment target is `v4.0.2`. |
-| `GO_VERSION` | `1.27.2` | Builder image Go version; must equal the core `go.mod` toolchain. |
+| `CORE_REF` | `v4.0.2` | Exact core tag or commit; rebuild for every Nauthilus release. |
+| `GO_VERSION` | `1.27.3` | Builder image Go version; must equal the core `go.mod` toolchain. |
 | `ALPINE_VERSION` | `3.24` | Builder image Alpine version. |
 | `GOEXPERIMENT` | `runtimesecret` | Mandatory host experiment. |
 | `GO_TAGS` | `netgo` | Host build tags. |

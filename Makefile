@@ -5,10 +5,10 @@
 # CORE_REF with this repository copied to contrib/plugins/dkim2-intelligence.
 
 GO ?= go
-GO_VERSION ?= 1.27.2
+GO_VERSION ?= 1.27.3
 ALPINE_VERSION ?= 3.24
 CORE_REPO ?= $(HOME)/GoLandProjects/nauthilus
-CORE_REF ?= v4.0.1
+CORE_REF ?= v4.0.2
 GOEXPERIMENT ?= runtimesecret
 GO_TAGS ?= netgo
 GOLANGCI_LINT ?= golangci-lint
