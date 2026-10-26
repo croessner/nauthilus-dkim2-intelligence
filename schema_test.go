@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestChainAndPeerSchemasHaveExactIndependentVocabulary protects the normative composition boundary.
 func TestChainAndPeerSchemasHaveExactIndependentVocabulary(t *testing.T) {
@@ -9,7 +12,7 @@ func TestChainAndPeerSchemasHaveExactIndependentVocabulary(t *testing.T) {
 		fields []fieldSpec
 		count  int
 	}{
-		{"chain", chainFields(), 34}, {"peer", peerFields(), 36},
+		{"chain", chainFields(), 32}, {"peer", peerFields(), 36},
 	} {
 		if len(tc.fields) != tc.count {
 			t.Fatalf("%s fields=%d want %d", tc.name, len(tc.fields), tc.count)
@@ -25,6 +28,26 @@ func TestChainAndPeerSchemasHaveExactIndependentVocabulary(t *testing.T) {
 			if field.Name == "ip" || field.Name == "subject_tag" || field.Name == "recipe_digest" {
 				t.Fatal("sensitive material duplicated")
 			}
+		}
+	}
+}
+
+// TestDraft07OutputsExcludeRetiredProtectionFlags keeps the Draft-06 donotmodify/donotexplode surface out of the composition.
+func TestDraft07OutputsExcludeRetiredProtectionFlags(t *testing.T) {
+	for _, field := range chainFields() {
+		if field.Name == "do_not_modify" || field.Name == "do_not_explode" {
+			t.Fatalf("chain output still declares retired field %s", field.Name)
+		}
+	}
+
+	catalog := violationCatalog()
+	if len(catalog) != 12 {
+		t.Fatalf("violation catalog has %d classes, want 12", len(catalog))
+	}
+
+	for _, class := range catalog {
+		if strings.HasPrefix(class, "do_not_") {
+			t.Fatalf("violation catalog still contains retired class %s", class)
 		}
 	}
 }

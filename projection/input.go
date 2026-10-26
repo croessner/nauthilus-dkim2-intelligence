@@ -27,7 +27,7 @@ const (
 	verificationPass        = "PASS"
 
 	ProjectionSchema         = "dkim2.verifier-projection.v1"
-	DraftVersion             = "draft-ietf-dkim-dkim2-spec-06"
+	DraftVersion             = "draft-ietf-dkim-dkim2-spec-07"
 	maximumHops              = 128
 	FactProjectionSchema     = "resource.dkim2.projection_schema"
 	factDraft                = "resource.dkim2.draft"
@@ -41,8 +41,6 @@ const (
 	factLocalPolicyVerdict   = "resource.dkim2.local_policy_verdict"
 	factAuthenticationReason = "resource.dkim2.authentication_reason"
 	factLocalPolicyReason    = "resource.dkim2.local_policy_reason"
-	FactDoNotModifyState     = "resource.dkim2.do_not_modify_state"
-	FactDoNotExplodeState    = "resource.dkim2.do_not_explode_state"
 	FactScanAction           = "environment.rspamd.scan_action_before_policy"
 	factMetricScore          = "environment.rspamd.metric_score"
 	factRejectThreshold      = "environment.rspamd.reject_threshold"
@@ -69,7 +67,6 @@ const (
 	stateExploded            = "exploded"
 	StateIndeterminate       = "indeterminate"
 	StateNotEvaluated        = "not_evaluated"
-	StateNotRequested        = "not_requested"
 	VerdictAccept            = "accept"
 	VerdictContinue          = "continue"
 	verdictReject            = "reject"
@@ -88,9 +85,9 @@ var historicalSignatureStates = []string{StateNotEvaluated, stateComplete}
 
 var custodyStructures = []string{StateNotEvaluated, custodyNotPresent, CustodyLinksEvaluated, CustodyTerminalRequires}
 
-var doNotModifyStates = []string{StateNotRequested, StateIndeterminate, StateNotEvaluated}
-
-var doNotExplodeStates = []string{StateNotRequested, "violated", StateIndeterminate, StateNotEvaluated}
+// replayClasses is the closed Draft-07 replay vocabulary; not_eligible marks an
+// originator-only PASS for which replay counting does not apply.
+var replayClasses = []string{"not_checked", "not_eligible", "disabled", "first_seen", stateExploded, "replayed", StateIndeterminate}
 
 // RspamdScanActions lists the closed pre-Policy scan action vocabulary.
 var RspamdScanActions = []string{
@@ -118,9 +115,6 @@ var requiredResourceFacts = []string{
 	factLocalPolicyMode,
 	factLocalPolicyVerdict,
 	factLocalPolicyReason,
-	FactDoNotModifyState,
-	FactDoNotExplodeState,
-	"resource.dkim2.dns_testing_effective",
 	factDisposition,
 	"resource.dkim2.chain",
 }
@@ -296,11 +290,9 @@ func validateAggregateFacts(facts map[string]pluginapi.DecisionFactView) error {
 		{id: FactHistoricalContent, allowed: historicalContentStates},
 		{id: FactHistoricalSignatures, allowed: historicalSignatureStates},
 		{id: FactCustodyStructure, allowed: custodyStructures},
-		{id: factReplayClass, allowed: []string{"not_checked", "disabled", "first_seen", stateExploded, "replayed", StateIndeterminate}},
+		{id: factReplayClass, allowed: replayClasses},
 		{id: factLocalPolicyMode, allowed: []string{"strict", "permissive", "testing"}},
 		{id: factLocalPolicyVerdict, allowed: []string{VerdictAccept, VerdictContinue, verdictReject, verdictTempfail}},
-		{id: FactDoNotModifyState, allowed: doNotModifyStates},
-		{id: FactDoNotExplodeState, allowed: doNotExplodeStates},
 	}
 	if err := validateEnumFacts(facts, enums); err != nil {
 		return err
@@ -313,10 +305,6 @@ func validateAggregateFacts(facts map[string]pluginapi.DecisionFactView) error {
 	}
 
 	if _, err := requireToken(facts, "resource.dkim2.verification_reason"); err != nil {
-		return err
-	}
-
-	if _, err := requireBoolean(facts, "resource.dkim2.dns_testing_effective"); err != nil {
 		return err
 	}
 
@@ -368,8 +356,6 @@ func decodeAggregateValues(facts map[string]pluginapi.DecisionFactView) (Project
 		{&projection.HistoricalSignatures, FactHistoricalSignatures, historicalSignatureStates},
 		{&projection.CustodyStructure, FactCustodyStructure, custodyStructures},
 		{&projection.Disposition, factDisposition, []string{VerdictAccept, VerdictContinue, verdictReject, verdictTempfail, "out_of_band_required"}},
-		{&projection.DoNotModifyState, FactDoNotModifyState, doNotModifyStates},
-		{&projection.DoNotExplodeState, FactDoNotExplodeState, doNotExplodeStates},
 	}
 	for _, specification := range specifications {
 		value, err := requireStringIn(facts, specification.id, specification.allowed...)
@@ -416,10 +402,6 @@ func validateAggregateCoherence(projection Projection) error {
 		return err
 	}
 
-	if err := validateAggregateProtectionStates(projection); err != nil {
-		return err
-	}
-
 	if !ValidProjectionBindings(projection.ProjectionBinding, projection.Chain) {
 		return fmt.Errorf("projection or hop binding does not match canonical verifier facts")
 	}
@@ -451,10 +433,6 @@ func validateCurrentProjectionMode(projection Projection) error {
 		return fmt.Errorf("current scope requires non-evaluated history and absent custody")
 	}
 
-	if projection.DoNotModifyState != StateNotEvaluated || projection.DoNotExplodeState != StateNotEvaluated {
-		return fmt.Errorf("current scope requires non-evaluated protection aggregates")
-	}
-
 	return nil
 }
 
@@ -466,10 +444,6 @@ func validateChainProjectionMode(projection Projection) error {
 
 	if projection.CustodyStructure == StateNotEvaluated {
 		return fmt.Errorf("chain scope requires evaluated custody structure")
-	}
-
-	if projection.DoNotModifyState == StateNotEvaluated || projection.DoNotExplodeState == StateNotEvaluated {
-		return fmt.Errorf("chain scope requires evaluated protection aggregates")
 	}
 
 	return nil
@@ -529,26 +503,6 @@ func validateCustodyStructure(projection Projection) error {
 		}
 	default:
 		return fmt.Errorf("unsupported custody aggregate")
-	}
-
-	return nil
-}
-
-// validateAggregateProtectionStates correlates chain requests with their aggregate evaluation states.
-func validateAggregateProtectionStates(projection Projection) error {
-	if projection.Scope == ScopeCurrent {
-		return nil
-	}
-
-	modifyRequested := slices.ContainsFunc(projection.Chain, func(hop Hop) bool { return hop.DoNotModify })
-	explodeRequested := slices.ContainsFunc(projection.Chain, func(hop Hop) bool { return hop.DoNotExplode })
-
-	if (projection.DoNotModifyState == StateNotRequested) == modifyRequested {
-		return fmt.Errorf("do-not-modify aggregate contradicts chain flags")
-	}
-
-	if (projection.DoNotExplodeState == StateNotRequested) == explodeRequested {
-		return fmt.Errorf("do-not-explode aggregate contradicts chain flags")
 	}
 
 	return nil
@@ -793,16 +747,6 @@ func decodeVerifierHop(record pluginapi.DecisionRecord) (Hop, error) {
 		return Hop{}, fmt.Errorf("applied Recipe contains no changes")
 	}
 
-	DoNotModify, err := recordBoolean(fields, "do_not_modify")
-	if err != nil {
-		return Hop{}, err
-	}
-
-	DoNotExplode, err := recordBoolean(fields, "do_not_explode")
-	if err != nil {
-		return Hop{}, err
-	}
-
 	Feedback, err := recordBoolean(fields, "feedback")
 	if err != nil {
 		return Hop{}, err
@@ -823,7 +767,7 @@ func decodeVerifierHop(record pluginapi.DecisionRecord) (Hop, error) {
 		AffectedHeaders: headers, SignatureState: SignatureState, CustodyTransition: custody, RecipeMode: RecipeMode,
 		RecipeBodyMode: RecipeBodyMode, HistoryHeaderState: historyHeader, HistoryBodyState: historyBody,
 		BodyAvailability: BodyAvailability, Sequence: Sequence, MessageInstance: instance, ChangeCount: ChangeCount,
-		AffectedHeaderCount: headerCount, DoNotModify: DoNotModify, DoNotExplode: DoNotExplode, Feedback: Feedback,
+		AffectedHeaderCount: headerCount, Feedback: Feedback,
 		FeedHere: FeedHere, Exploded: Exploded, RecipeHasHeaders: hasHeaders,
 	}, nil
 }

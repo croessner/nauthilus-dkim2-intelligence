@@ -35,7 +35,7 @@ func NewPlugin() *Plugin { return &Plugin{} }
 
 // Metadata declares the native contract without credential, Redis or HTTP capabilities.
 func (*Plugin) Metadata() pluginapi.Metadata {
-	return pluginapi.Metadata{Name: "dkim2_intelligence", Version: "0.1.0", APIVersion: pluginapi.APIVersion,
+	return pluginapi.Metadata{Name: "dkim2_intelligence", Version: "0.2.0", APIVersion: pluginapi.APIVersion,
 		Build: pluginapi.BuildInfo{ArtifactIdentity: pluginapi.NativeArtifactIdentity(), GoVersion: runtime.Version(),
 			GitCommit: buildCommit, BuildTime: buildTime, BuildTags: []string{buildTags}},
 		Description: "Correlated verifier, reputation and current-peer intelligence for Policy.",

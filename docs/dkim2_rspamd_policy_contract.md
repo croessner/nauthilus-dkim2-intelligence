@@ -9,6 +9,8 @@ use the exact target and projection identity below and reject unknown fields.
 - Policy API version: `1`
 - Target: `dkim2/accept-message-instance`
 - Projection: `dkim2.verifier-projection.v1`
+- DKIM2 draft: `draft-ietf-dkim-dkim2-spec-07` (exact literal; Draft-06 input
+  is rejected)
 - Canonical Policy-Basic username: `rspamd-verifier`
 - One unary request per applicable Rspamd scan
 - No `subject` object until an independently authenticated policy subject is
@@ -18,10 +20,10 @@ use the exact target and projection identity below and reject unknown fields.
 An applicable scan has a strictly validated projection with verification
 `PASS`, either a single-hop `current` scope or complete `chain` scope, existing
 DKIM2 `local_policy_verdict`/`disposition` in `accept|continue`, and replay class
-`first_seen|exploded`. A valid current projection reports historical content,
-historical signatures, and both protection aggregates as `not_evaluated`, with
+`first_seen|exploded|not_eligible`. A valid current projection reports historical content
+and historical signatures as `not_evaluated`, with
 custody `not_present`. A valid chain projection reports complete historical
-content and signatures plus evaluated custody and protection aggregates. The
+content and signatures plus evaluated custody. The
 normal filter enforces verifier
 FAIL/PERMERROR/TEMPERROR, non-permittable replay state, reject, tempfail, and
 `out_of_band_required` without calling Nauthilus. Required-provider failure is
@@ -105,7 +107,7 @@ already nested below `resource.attributes`.
 | `resource.dkim2.projection_binding_algorithm` | string enum | Fixed to `sha-256` in v1. |
 | `resource.dkim2.projection_binding` | 32-byte value | Digest of the complete canonical projection, used for coherence and provider correlation. |
 | `resource.dkim2.verification_state` | enum | Immutable verifier state: `PASS`, `FAIL`, `PERMERROR`, or `TEMPERROR`. |
-| `resource.dkim2.verification_reason` | closed enum | Verifier-owned primary reason. |
+| `resource.dkim2.verification_reason` | canonical token | Verifier-owned primary reason (Draft-07 adds `from_not_authentic`); the plugin checks token syntax only, because a projection exists only for `PASS`. |
 | `resource.dkim2.scope` | enum | `current` or `chain`. |
 | `resource.dkim2.historical_content` | enum | `not_evaluated`, `complete`, or `partial`. |
 | `resource.dkim2.historical_signatures` | enum | `not_evaluated` or `complete`. |
@@ -115,15 +117,18 @@ already nested below `resource.attributes`.
 | `resource.dkim2.claimed_hop_count` | bounded positive integer | Number of records claimed in the complete chain. It must match the chain and target coherence rules. |
 | `resource.dkim2.authentication_state` | enum | Final DKIM2 authentication state after replay processing. |
 | `resource.dkim2.authentication_reason` | closed enum | Final authentication reason, including replay-specific reasons. |
-| `resource.dkim2.replay_class` | enum | `not_checked`, `disabled`, `first_seen`, `exploded`, `replayed`, or `indeterminate`. |
+| `resource.dkim2.replay_class` | enum | `not_checked`, `not_eligible`, `disabled`, `first_seen`, `exploded`, `replayed`, or `indeterminate`. `not_eligible` (Draft-07) means PASS with only the originator's `i=1` signature, so replay counting does not apply. |
 | `resource.dkim2.local_policy_mode` | enum | DKIM2 daemon policy mode: `strict`, `permissive`, or `testing`. |
 | `resource.dkim2.local_policy_verdict` | enum | Daemon-local `accept`, `continue`, `reject`, or `tempfail`. |
 | `resource.dkim2.local_policy_reason` | closed enum | Daemon-local primary policy reason. |
-| `resource.dkim2.do_not_modify_state` | closed enum | Daemon evaluation of authenticated `donotmodify`: `not_requested`, `indeterminate`, or `not_evaluated`. |
-| `resource.dkim2.do_not_explode_state` | closed enum | Daemon evaluation of authenticated `donotexplode`: `not_requested`, `violated`, `indeterminate`, or `not_evaluated`. |
-| `resource.dkim2.dns_testing_effective` | boolean | Whether authenticated DNS testing policy affected the daemon decision. |
 | `resource.dkim2.disposition` | enum | Closed disposition already selected by `dkim2d`; Nauthilus cannot widen it. |
 | `resource.dkim2.received_dsn_propagation` | closed enum, optional | Propagation class of a received delivery-status notification: `not_applicable`, `eligible`, `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `unsupported_chain`, `not_reconstructable`, or `not_evaluated`. The verifier sends it only for notifications that carry a received-DSN projection, so the fact is not required. |
+
+Draft-07 removed `donotmodify`/`donotexplode` (Section 10.10) and the DNS
+`t=` testing tag, so the Draft-06 facts `resource.dkim2.do_not_modify_state`,
+`resource.dkim2.do_not_explode_state` and `resource.dkim2.dns_testing_effective`
+no longer exist. A request that still carries any of them is rejected as an
+unknown DKIM2 fact.
 
 The existing `/v1/process` response already supplies most aggregate values.
 The projection schema, projection binding, claimed hop count, and complete hop
@@ -150,14 +155,12 @@ Each record contains:
 | `signature_algorithms` | bounded string list | Closed set of successfully authenticated algorithm families for the hop. |
 | `signature_state` | enum | Aggregate authenticated hop signature state, initially `pass` for a retained complete-chain hop. |
 | `custody_transition` | enum | Exact v1 vocabulary: `origin`, `ordinary`, `next_domain`, or `terminal_next_domain`. |
-| `do_not_modify` | boolean | Authenticated `donotmodify` flag. |
-| `do_not_explode` | boolean | Authenticated `donotexplode` flag. |
 | `feedback` | boolean | Authenticated `feedback` flag. |
 | `feed_here` | boolean | Authenticated `feedhere` flag. |
 | `exploded` | boolean | Authenticated `exploded` marker. |
 | `recipe_mode` | enum | `unchanged` or `applied`. |
 | `recipe_has_header_changes` | boolean | Whether the authenticated Recipe contains one or more header dimensions. |
-| `recipe_body_mode` | enum | Exact Draft-06 body member form: `absent`, `steps`, or `unavailable`. `unavailable` represents the irreversible/null-body case. |
+| `recipe_body_mode` | enum | Exact Draft-07 body member form: `absent`, `steps`, or `unavailable`. `unavailable` represents the irreversible/null-body case. |
 | `recipe_digest` | 32-byte value | Digest of the canonical normalized Recipe descriptor, never the Recipe payload. |
 | `change_classes` | bounded string list | Ascending lexical-byte-order unique subset of exactly `body.rewrite` and `header.rewrite`. These are verifier-derived, not guessed by Rspamd; `body.append` is not a v1 value. |
 | `affected_headers` | bounded string list | Sorted unique lower-case header names only; no values. |
@@ -166,6 +169,35 @@ Each record contains:
 | `body_availability` | enum | `known` or `unavailable`. |
 | `change_count` | bounded nonnegative integer | Number of normalized semantic change classes/events represented by the descriptor. |
 | `affected_header_count` | bounded nonnegative integer | Coherence count for the retained affected-header list. |
+
+Each record has exactly these 21 fields; the Draft-06 `do_not_modify` and
+`do_not_explode` fields are rejected.
+
+### Hop binding encoding (Draft-07)
+
+All frames use a 4-byte big-endian length prefix for byte strings, 8-byte
+big-endian unsigned integers, and one byte (`0`/`1`) for booleans. String lists
+are an 8-byte count followed by length-prefixed members.
+
+- Recipe digest: SHA-256 of `"dkim2-recipe-descriptor-v1"`, `recipe_body_mode`,
+  `affected_headers` (count + members), `change_classes` (count + members).
+- Hop content digest: SHA-256 of `"dkim2-verifier-hop-binding-v1"`, `sequence`,
+  `message_instance`, `signer_domain`, `signature_algorithms`,
+  `signature_state`, `custody_transition`, the three flag bytes `feedback`,
+  `feed_here`, `exploded`, `recipe_mode`, the `recipe_has_header_changes` byte,
+  `recipe_body_mode`, `recipe_digest`, `change_classes`, `affected_headers`,
+  `change_count`, `affected_header_count`, `history_header_state`,
+  `history_body_state`, `body_availability`.
+- Projection binding: SHA-256 of `"dkim2-verifier-projection-binding-v1"`,
+  `"dkim2.verifier-projection.v1"`, `"draft-ietf-dkim-dkim2-spec-07"`, hop
+  count, then every hop content digest in order.
+- Hop binding: SHA-256 of `"dkim2-verifier-bound-hop-v1"`, the projection
+  binding, `sequence`, and the hop content digest.
+
+Draft-06 framed five flag bytes (`do_not_modify`, `do_not_explode`, `feedback`,
+`feed_here`, `exploded`) and the Draft-06 literal, so every Draft-06 binding
+differs and never validates. The encoding is proven against the real `dkim2d`
+Draft-07 two-hop response in `projection/testdata`.
 
 Selector and key fingerprint are deliberately omitted from v1. DKIM2 permits
 multiple signature sets per hop; one scalar selector/fingerprint would either
@@ -193,7 +225,7 @@ Placeholder domains and thresholds are illustrative; use the separate
 consumer observation overlay until operator calibration is approved.
 
 `plugin.dkim2_intelligence.assessed_chain` has one record per admitted verifier
-hop in identical order, exactly 34 declared fields and the same sequence,
+hop in identical order, exactly 32 declared fields and the same sequence,
 Message-Instance, signer domain and hop binding. It copies the verifier's
 lower-case signature state and privacy-minimized Recipe/history semantics.
 It adds the complete configured-profile signer reputation tuple, explicit
@@ -262,7 +294,7 @@ ordering rules.
 - request and instance identities: at most 128 bytes;
 - recipient classes: sorted unique subset of `external`, `local`, and `relay`,
   at most three values;
-- assessed `violation_classes`: sorted unique schema-owned values, at most 14;
+- assessed `violation_classes`: sorted unique schema-owned values, at most 12;
 - projection and hop bindings and Recipe digests: exactly 32 decoded bytes;
 - every value and the complete request remain subject to any stricter generic
   Policy API scalar, list, record, and aggregate bound.

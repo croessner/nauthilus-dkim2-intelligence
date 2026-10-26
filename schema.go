@@ -32,7 +32,7 @@ func chainFields() []fieldSpec {
 		booleanField(valueIsTarget), textField(valueSignerDomain, 253, true),
 		enumField(valueSignatureState, 16, "pass"),
 		enumField(valueCustodyTransition, 32, "origin", "ordinary", "next_domain", "terminal_next_domain"),
-		booleanField(valueDoNotModify), booleanField(valueDoNotExplode), booleanField(valueFeedback), booleanField(valueFeedHere), booleanField(valueExploded),
+		booleanField(valueFeedback), booleanField(valueFeedHere), booleanField(valueExploded),
 		enumField(valueRecipeMode, 16, "unchanged", "applied"), enumField(valueRecipeBodyMode, 16, "absent", "steps", valueUnavailable),
 		listField(valueChangeClasses, 2, 64, "body.rewrite", "header.rewrite"), listField(valueAffectedHeaders, 128, 64),
 		integerField(valueChangeCount, 0, 128, true), integerField(valueAffectedHeaderCount, 0, 128, true),
@@ -45,7 +45,7 @@ func chainFields() []fieldSpec {
 	return append(fields,
 		enumField(valueIdentityContractState, 16, valueMatched, valueDomainOnly, valueMissing, valueMismatch, valueUnavailable),
 		enumField(valueIdentityContractStrength, 16, valueCidr, valueAsn, valueDomainOnly, valueNone),
-		listField(valueViolationClasses, 14, 64, violationCatalog()...),
+		listField(valueViolationClasses, 12, 64, violationCatalog()...),
 	)
 }
 
@@ -98,7 +98,7 @@ func tupleFieldName(role, suffix string) string {
 
 // violationCatalog fixes the privacy-minimized explanation vocabulary independently of Policy decisions.
 func violationCatalog() []string {
-	return strings.Fields("authentication_not_pass body_change_forbidden body_unavailable contract_missing contract_mismatch do_not_explode_violated do_not_modify_violated header_change_forbidden history_not_matched identity_unavailable reputation_blocked reputation_unavailable recipe_not_authorized upstream_nonpermittable")
+	return strings.Fields("authentication_not_pass body_change_forbidden body_unavailable contract_missing contract_mismatch header_change_forbidden history_not_matched identity_unavailable reputation_blocked reputation_unavailable recipe_not_authorized upstream_nonpermittable")
 }
 
 // textField declares one bounded scalar string.

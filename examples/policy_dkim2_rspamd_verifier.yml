@@ -1,3 +1,4 @@
+# Contract: dkim2.verifier-projection.v1 for draft-ietf-dkim-dkim2-spec-07 (Draft-06 input is rejected).
 # Strict reference Policy: thresholds and .example identities are illustrative operator settings.
 # Load the reputation, GeoIP and DKIM2 intelligence modules from go_plugin_dkim2_intelligence.yml.
 # All hard denies precede operator rules and permits. Use the separate observation target fragment while calibrating.
@@ -40,9 +41,6 @@ policy:
                 - dkim2.local_policy_mode
                 - dkim2.local_policy_verdict
                 - dkim2.local_policy_reason
-                - dkim2.do_not_modify_state
-                - dkim2.do_not_explode_state
-                - dkim2.dns_testing_effective
                 - dkim2.disposition
                 - dkim2.chain
                 - dkim2.received_dsn_propagation
@@ -138,6 +136,7 @@ policy:
                             not_in:
                                 - first_seen
                                 - exploded
+                                - not_eligible
                           name: deny_replay
                           then:
                             decision: deny
@@ -205,8 +204,6 @@ policy:
                                     contains_any:
                                         - authentication_not_pass
                                         - body_unavailable
-                                        - do_not_explode_violated
-                                        - do_not_modify_violated
                                         - history_not_matched
                                         - upstream_nonpermittable
                                     field: violation_classes
@@ -707,26 +704,6 @@ policy:
                                       type: string
                                     - allowed_sources:
                                         - caller
-                                      attribute: resource.dkim2.do_not_modify_state
-                                      category: resource
-                                      max_length: 32
-                                      required: true
-                                      type: string
-                                    - allowed_sources:
-                                        - caller
-                                      attribute: resource.dkim2.do_not_explode_state
-                                      category: resource
-                                      max_length: 32
-                                      required: true
-                                      type: string
-                                    - allowed_sources:
-                                        - caller
-                                      attribute: resource.dkim2.dns_testing_effective
-                                      category: resource
-                                      required: true
-                                      type: boolean
-                                    - allowed_sources:
-                                        - caller
                                       attribute: resource.dkim2.disposition
                                       category: resource
                                       max_length: 16
@@ -781,14 +758,6 @@ policy:
                                               name: custody_transition
                                               required: true
                                               type: string
-                                            - expression_visible: true
-                                              name: do_not_modify
-                                              required: true
-                                              type: boolean
-                                            - expression_visible: true
-                                              name: do_not_explode
-                                              required: true
-                                              type: boolean
                                             - expression_visible: true
                                               name: feedback
                                               required: true
@@ -857,7 +826,7 @@ policy:
                                               type: integer
                                         id: verifier_chain
                                         max_aggregate_bytes: 196608
-                                        max_fields: 23
+                                        max_fields: 21
                                         max_records: 128
                                         min_records: 1
                                         version: v1
@@ -991,14 +960,6 @@ policy:
                                               required: true
                                               type: string
                                             - expression_visible: true
-                                              name: do_not_modify
-                                              required: true
-                                              type: boolean
-                                            - expression_visible: true
-                                              name: do_not_explode
-                                              required: true
-                                              type: boolean
-                                            - expression_visible: true
                                               name: feedback
                                               required: true
                                               type: boolean
@@ -1110,14 +1071,14 @@ policy:
                                               required: true
                                               type: string
                                             - expression_visible: true
-                                              max_items: 14
+                                              max_items: 12
                                               max_length: 64
                                               name: violation_classes
                                               required: true
                                               type: strings
                                         id: dkim2_intelligence_assessed_chain
                                         max_aggregate_bytes: 262144
-                                        max_fields: 34
+                                        max_fields: 32
                                         max_records: 128
                                         min_records: 1
                                         version: v1

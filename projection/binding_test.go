@@ -31,8 +31,6 @@ type bindingGolden struct {
 		MessageInstance     int64    `json:"message_instance"`
 		ChangeCount         int64    `json:"change_count"`
 		AffectedHeaderCount int64    `json:"affected_header_count"`
-		DoNotModify         bool     `json:"do_not_modify"`
-		DoNotExplode        bool     `json:"do_not_explode"`
 		Feedback            bool     `json:"feedback"`
 		FeedHere            bool     `json:"feed_here"`
 		Exploded            bool     `json:"exploded"`
@@ -46,6 +44,7 @@ type bindingGolden struct {
 	} `json:"expected"`
 }
 
+// TestBindingMatchesDKIM2ProducerGolden recomputes the Draft-07 producer vector byte for byte.
 func TestBindingMatchesDKIM2ProducerGolden(t *testing.T) {
 	fixture := readBindingGolden(t)
 	hop := goldenHop(t, fixture)
@@ -61,6 +60,7 @@ func TestBindingMatchesDKIM2ProducerGolden(t *testing.T) {
 	assertGoldenDigest(t, "bound hop", boundHop[:], fixture.Expected.BoundHop)
 }
 
+// TestBindingRejectsEveryBoundSemanticMutation proves that every framed field is bound.
 func TestBindingRejectsEveryBoundSemanticMutation(t *testing.T) {
 	fixture := readBindingGolden(t)
 	hop := goldenHop(t, fixture)
@@ -75,6 +75,9 @@ func TestBindingRejectsEveryBoundSemanticMutation(t *testing.T) {
 		mutate func(*Hop)
 	}{
 		{name: "signature state", mutate: func(value *Hop) { value.SignatureState = "fail" }},
+		{name: "feedback flag", mutate: func(value *Hop) { value.Feedback = !value.Feedback }},
+		{name: "feedhere flag", mutate: func(value *Hop) { value.FeedHere = !value.FeedHere }},
+		{name: "exploded flag", mutate: func(value *Hop) { value.Exploded = !value.Exploded }},
 		{name: "Recipe header presence", mutate: func(value *Hop) { value.RecipeHasHeaders = false }},
 		{name: "Recipe body mode", mutate: func(value *Hop) { value.RecipeBodyMode = StateUnavailable }},
 		{name: "change classes", mutate: func(value *Hop) { value.ChangeClasses = []string{"body.rewrite"} }},
@@ -124,8 +127,7 @@ func goldenHop(t *testing.T, fixture bindingGolden) Hop {
 		HistoryHeaderState: fixture.Hop.HistoryHeaderState, HistoryBodyState: fixture.Hop.HistoryBodyState,
 		BodyAvailability: fixture.Hop.BodyAvailability, Sequence: fixture.Hop.Sequence,
 		MessageInstance: fixture.Hop.MessageInstance, ChangeCount: fixture.Hop.ChangeCount,
-		AffectedHeaderCount: fixture.Hop.AffectedHeaderCount, DoNotModify: fixture.Hop.DoNotModify,
-		DoNotExplode: fixture.Hop.DoNotExplode, Feedback: fixture.Hop.Feedback, FeedHere: fixture.Hop.FeedHere,
+		AffectedHeaderCount: fixture.Hop.AffectedHeaderCount, Feedback: fixture.Hop.Feedback, FeedHere: fixture.Hop.FeedHere,
 		Exploded: fixture.Hop.Exploded, RecipeHasHeaders: fixture.Hop.RecipeHasHeaders,
 	}
 }

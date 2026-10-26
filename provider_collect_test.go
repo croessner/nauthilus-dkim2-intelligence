@@ -7,8 +7,8 @@ import (
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 	"github.com/croessner/nauthilus/v4/server/pluginregistry"
 	"github.com/croessner/nauthilus/v4/server/pluginruntime"
-	"github.com/croessner/nauthilus/v4/server/policy/testsupport"
 	"github.com/prometheus/client_golang/prometheus"
+	"os"
 	"strconv"
 	"testing"
 )
@@ -106,7 +106,7 @@ func assertCompositionMetrics(t *testing.T, metricRegistry *prometheus.Registry)
 	}
 }
 
-// trackedRequest decodes the shared canonical wire fixture into immutable public test inputs.
+// trackedRequest decodes this repository's Draft-07 wire fixture (never the core copy) into immutable public test inputs.
 func trackedRequest(t *testing.T) pluginapi.DecisionFactRequest {
 	t.Helper()
 
@@ -118,7 +118,13 @@ func trackedRequest(t *testing.T) pluginapi.DecisionFactRequest {
 			Attributes map[string]json.RawMessage `json:"attributes"`
 		} `json:"environment"`
 	}
-	if err := json.Unmarshal(testsupport.TrackedDKIM2RequestBytes(t), &wire); err != nil {
+
+	payload, err := os.ReadFile(trackedPolicyRequestFixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = json.Unmarshal(payload, &wire); err != nil {
 		t.Fatal(err)
 	}
 

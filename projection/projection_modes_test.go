@@ -94,15 +94,6 @@ func TestVerifierProjectionRejectsIncoherentProjectionModesAndCustody(t *testing
 			},
 		},
 		{
-			name: "chain scope with non-evaluated protection",
-			request: func(t *testing.T) pluginapi.DecisionFactRequest {
-				return replaceRequestStringFacts(t, testDecisionRequest(t, "192.0.2.25"), map[string]string{
-					FactDoNotModifyState:  StateNotEvaluated,
-					FactDoNotExplodeState: StateNotEvaluated,
-				})
-			},
-		},
-		{
 			name: "absent custody with next-domain transition",
 			request: func(t *testing.T) pluginapi.DecisionFactRequest {
 				return testDecisionRequestWithHops(t, []Hop{
@@ -173,8 +164,6 @@ func asCurrentProjection(t *testing.T, request pluginapi.DecisionFactRequest) pl
 		FactScope:                ScopeCurrent,
 		FactHistoricalContent:    StateNotEvaluated,
 		FactHistoricalSignatures: StateNotEvaluated,
-		FactDoNotModifyState:     StateNotEvaluated,
-		FactDoNotExplodeState:    StateNotEvaluated,
 	})
 }
 

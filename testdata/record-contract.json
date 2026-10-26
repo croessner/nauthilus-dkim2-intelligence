@@ -4,7 +4,7 @@
     "version": "v1",
     "min_records": 1,
     "max_records": 128,
-    "max_fields": 34,
+    "max_fields": 32,
     "max_aggregate_bytes": 262144,
     "fields": [
       {
@@ -55,18 +55,6 @@
         "required": true,
         "expression_visible": true,
         "max_length": 32
-      },
-      {
-        "name": "do_not_modify",
-        "type": "boolean",
-        "required": true,
-        "expression_visible": true
-      },
-      {
-        "name": "do_not_explode",
-        "type": "boolean",
-        "required": true,
-        "expression_visible": true
       },
       {
         "name": "feedback",
@@ -233,7 +221,7 @@
         "required": true,
         "expression_visible": true,
         "max_length": 64,
-        "max_items": 14
+        "max_items": 12
       }
     ]
   },

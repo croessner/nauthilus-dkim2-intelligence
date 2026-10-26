@@ -40,6 +40,82 @@ If a core image still bundles its own copy at the same path, the mount
 replaces it; the checksum and signer pin make sure the intended artifact is
 loaded. Never relax `verification_policy: signature_required` to proceed.
 
+## DKIM2 Draft-07 contract (plugin 0.2.0)
+
+The plugin implements `draft-ietf-dkim-dkim2-spec-07` only. It must be rolled
+out together with the Draft-07 Rspamd DKIM2 adapter and a Draft-07 `dkim2d`;
+any Draft-06 request (draft literal, removed facts, removed hop fields or
+Draft-06 bindings) is rejected with `invalid_input`, which the reference
+Policy turns into `deny_incomplete_assessment`.
+
+What changed on the wire:
+
+- `resource.dkim2.draft` is `draft-ietf-dkim-dkim2-spec-07`.
+- The facts `resource.dkim2.do_not_modify_state`,
+  `resource.dkim2.do_not_explode_state` and
+  `resource.dkim2.dns_testing_effective` are no longer sent and are rejected
+  if present.
+- `resource.dkim2.chain` records lose `do_not_modify` and `do_not_explode`
+  (21 fields instead of 23); the hop/projection binding no longer frames those
+  two flags, so every binding value differs from Draft-06.
+- `resource.dkim2.replay_class` gains `not_eligible` (PASS where only the
+  originator's `i=1` signature authenticated the message).
+- `resource.dkim2.verification_reason` may carry the new `from_not_authentic`
+  reason; it only occurs with non-PASS verification, which never reaches
+  composition.
+- Signature algorithms stay `rsa-sha256`, `rsa-sha512`, `ed25519-sha256`,
+  `ed25519-sha512`.
+
+What changed in the plugin output:
+
+- `plugin.dkim2_intelligence.assessed_chain` loses `do_not_modify` and
+  `do_not_explode` (32 fields instead of 34).
+- `violation_classes` loses `do_not_modify_violated` and
+  `do_not_explode_violated` (12 classes instead of 14, `max_items: 12`).
+- `smtp_peer` (36 fields) and `assessment_complete` are unchanged.
+
+### Required production configuration changes
+
+The reference is `examples/policy_dkim2_rspamd_verifier.yml`. In the
+`nauthilus-tests` Kubernetes source files:
+
+`config.d/70-dkim2-policy.yml` (namespace `dkim2`):
+
+1. `schema_contributions.static.accept-message-instance.versions.v1.facts`:
+   delete the three fact entries `resource.dkim2.do_not_modify_state`,
+   `resource.dkim2.do_not_explode_state` and
+   `resource.dkim2.dns_testing_effective`. They are `required: true`, so a
+   Draft-07 request is refused by admission while they remain. (mandatory)
+2. Same list, `resource.dkim2.chain` `record_schema` (`id: verifier_chain`):
+   delete the fields `do_not_modify` and `do_not_explode` and change
+   `max_fields: 23` to `max_fields: 21`. (mandatory)
+3. Same list, `plugin.dkim2_intelligence.assessed_chain` `record_schema`
+   (`id: dkim2_intelligence_assessed_chain`): delete `do_not_modify` and
+   `do_not_explode`, change `violation_classes` `max_items: 14` to
+   `max_items: 12`, and `max_fields: 34` to `max_fields: 32`. (mandatory)
+4. Rule `deny_integrity_violation`: remove `do_not_explode_violated` and
+   `do_not_modify_violated` from `contains_any`. The production list also
+   contains `terminal_oob_required`, which the plugin has never emitted; the
+   reference Policy omits it (terminal next-domain custody is handled by
+   `deny_terminal_nd`). (mandatory for the two retired classes; recommended
+   for `terminal_oob_required`)
+5. Rule `deny_replay`: add `not_eligible` to the `not_in` list
+   (`first_seen`, `exploded`, `not_eligible`). Without it every originator-only
+   message (single `i=1` signature) is denied as a replay. (operator decision;
+   the reference Policy permits it)
+
+`config.d/48-policy-api.yml` (Rspamd verifier client): remove
+`dkim2.do_not_modify_state`, `dkim2.do_not_explode_state` and
+`dkim2.dns_testing_effective` from `allowed_resource_attributes` so the
+allowlist stays closed. (recommended)
+
+`config.d/55-go-plugins.yml`, module `dkim2_intelligence`: set `checksum` to
+the new artifact's SHA-256 and `signer` to `rns-auth-plugin-build-key-2026`
+(see the move section above). `name`, `type`, `path`, `signature` and
+`config` keys stay unchanged. The `reputation` module's `resource.dkim2.chain`
+correlation fields (`sequence`, `message_instance`, `hop_binding`,
+`signer_domain`) are unchanged.
+
 ## Rollout
 
 1. `make check CORE_REF=<tag>` and `make sign CORE_REF=<tag>` on a clean,

@@ -132,7 +132,7 @@ verification, reconstruction, Recipe execution, replay handling and sealing.
 The component is `dkim2/plugin.dkim2_intelligence.assessment`. Its only outputs
 are `plugin.dkim2_intelligence.assessed_chain`, `.smtp_peer` and
 `.assessment_complete`. The first collection contains the admitted ordered
-chain (1–128 records, 34 declared fields, 262144 aggregate bytes); the second
+chain (1–128 records, 32 declared fields, 262144 aggregate bytes); the second
 contains one SMTP peer record (36 declared fields, 8192 aggregate bytes).
 Conditional tuple fields are absent when their state does not permit details.
 The independent normative fixture is `testdata/record-contract.json`; the

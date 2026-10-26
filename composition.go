@@ -69,8 +69,6 @@ func hopRecordBuilder(hop projection.Hop, target bool, identity identityResult) 
 	b.text(valueSignerDomain, hop.SignerDomain)
 	b.text(valueSignatureState, hop.SignatureState)
 	b.text(valueCustodyTransition, hop.CustodyTransition)
-	b.boolean(valueDoNotModify, hop.DoNotModify)
-	b.boolean(valueDoNotExplode, hop.DoNotExplode)
 	b.boolean(valueFeedback, hop.Feedback)
 	b.boolean(valueFeedHere, hop.FeedHere)
 	b.boolean(valueExploded, hop.Exploded)
@@ -138,7 +136,6 @@ func compositionViolations(source projection.Projection, index int, subjects cor
 		"authentication_not_pass": target && source.AuthenticationState != "PASS",
 		"upstream_nonpermittable": target && source.Disposition != "accept" && source.Disposition != "continue",
 	}
-	applyPriorHopViolations(flags, source.Chain, index)
 	tuples := []view.Tuple{subjects.signers[index]}
 
 	if target {
@@ -194,17 +191,6 @@ func composedValueBytes(value pluginapi.DecisionValue) int {
 	default:
 		return 8
 	}
-}
-
-// applyPriorHopViolations compares protection flags only with the immediately preceding hop.
-func applyPriorHopViolations(flags map[string]bool, chain []projection.Hop, index int) {
-	if index == 0 {
-		return
-	}
-
-	previous, hop := chain[index-1], chain[index]
-	flags["do_not_modify_violated"] = previous.DoNotModify && len(hop.ChangeClasses) > 0
-	flags["do_not_explode_violated"] = previous.DoNotExplode && hop.Exploded
 }
 
 // applyReputationViolations accumulates independent blocked and unavailable evidence without a Policy decision.

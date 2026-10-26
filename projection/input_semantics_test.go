@@ -14,70 +14,30 @@ import (
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-func TestVerifierProjectionRejectsImpossibleAggregateFlagStates(t *testing.T) {
-	tests := []struct {
-		name  string
-		id    string
-		value string
-	}{
-		{name: "modify satisfied", id: FactDoNotModifyState, value: "satisfied"},
-		{name: "modify violated", id: FactDoNotModifyState, value: "violated"},
-		{name: "explode satisfied", id: FactDoNotExplodeState, value: "satisfied"},
+// TestVerifierProjectionAcceptsExactDraft07ReplayClasses pins the closed Draft-07 replay vocabulary.
+func TestVerifierProjectionAcceptsExactDraft07ReplayClasses(t *testing.T) {
+	want := []string{"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate"}
+	if !slices.Equal(replayClasses, want) {
+		t.Fatalf("replayClasses = %v, want %v", replayClasses, want)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), test.id, test.value)
-			if _, err := Decode(request); err == nil {
-				t.Fatalf("Decode() error = nil for %s=%q", test.id, test.value)
+	for _, class := range want {
+		t.Run(class, func(t *testing.T) {
+			request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), "resource.dkim2.replay_class", class)
+			if _, err := Decode(request); err != nil {
+				t.Fatalf("Decode() error = %v for replay class %q", err, class)
 			}
 		})
 	}
 }
 
-func TestVerifierProjectionRejectsAggregateFlagContradictions(t *testing.T) {
-	tests := []struct {
-		name              string
-		DoNotModify       bool
-		DoNotExplode      bool
-		DoNotModifyState  string
-		DoNotExplodeState string
-		wantError         bool
-	}{
-		{
-			name: "explode request cannot be aggregate not requested", DoNotExplode: true,
-			DoNotModifyState: StateNotRequested, DoNotExplodeState: StateNotRequested, wantError: true,
-		},
-		{
-			name: "modify request cannot be aggregate not requested", DoNotModify: true,
-			DoNotModifyState: StateNotRequested, DoNotExplodeState: StateNotRequested, wantError: true,
-		},
-		{
-			name: "explode request may remain indeterminate", DoNotExplode: true,
-			DoNotModifyState: StateNotRequested, DoNotExplodeState: StateIndeterminate,
-		},
-		{
-			name: "modify request may remain indeterminate", DoNotModify: true,
-			DoNotModifyState: StateIndeterminate, DoNotExplodeState: StateNotRequested,
-		},
-		{
-			name:             "unrequested flags require aggregate not requested",
-			DoNotModifyState: StateIndeterminate, DoNotExplodeState: StateNotRequested, wantError: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := testDecisionRequestWithFlagStates(
-				t, "192.0.2.25", test.DoNotModify, test.DoNotExplode,
-				test.DoNotModifyState, test.DoNotExplodeState,
-			)
-
-			_, err := Decode(request)
-			if (err != nil) != test.wantError {
-				t.Fatalf("Decode() error = %v, wantError %t", err, test.wantError)
-			}
-		})
+// TestVerifierProjectionRejectsUnknownReplayClass fails closed on replay classes outside Draft-07.
+func TestVerifierProjectionRejectsUnknownReplayClass(t *testing.T) {
+	for _, class := range []string{"eligible", "NOT_ELIGIBLE", ""} {
+		request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), "resource.dkim2.replay_class", class)
+		if _, err := Decode(request); err == nil {
+			t.Fatalf("Decode() accepted replay class %q", class)
+		}
 	}
 }
 

@@ -17,8 +17,6 @@ const (
 	valueCustodyTransition        = "custody_transition"
 	valueDataAgeSeconds           = "data_age_seconds"
 	valueDkim2                    = "dkim2"
-	valueDoNotExplode             = "do_not_explode"
-	valueDoNotModify              = "do_not_modify"
 	valueDomainOnly               = "domain_only"
 	valueExploded                 = "exploded"
 	valueFeedHere                 = "feed_here"

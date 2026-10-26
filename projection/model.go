@@ -21,8 +21,6 @@ type Projection struct {
 	HistoricalSignatures  string
 	CustodyStructure      string
 	Disposition           string
-	DoNotModifyState      string
-	DoNotExplodeState     string
 	TargetSequence        int64
 	TargetMessageInstance int64
 	ClaimedHopCount       int64
@@ -47,8 +45,6 @@ type Hop struct {
 	MessageInstance     int64
 	ChangeCount         int64
 	AffectedHeaderCount int64
-	DoNotModify         bool
-	DoNotExplode        bool
 	Feedback            bool
 	FeedHere            bool
 	Exploded            bool

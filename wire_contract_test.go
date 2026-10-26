@@ -163,8 +163,6 @@ func readTrackedCurrentPolicyRequest(t *testing.T) management.PolicyDecisionRequ
 		"dkim2.scope":                 projection.ScopeCurrent,
 		"dkim2.historical_content":    projection.StateNotEvaluated,
 		"dkim2.historical_signatures": projection.StateNotEvaluated,
-		"dkim2.do_not_modify_state":   projection.StateNotEvaluated,
-		"dkim2.do_not_explode_state":  projection.StateNotEvaluated,
 	}
 
 	for name, replacement := range replacements {

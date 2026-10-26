@@ -12,13 +12,13 @@
         "string": "dkim2.verifier-projection.v1"
       },
       "dkim2.draft": {
-        "string": "draft-ietf-dkim-dkim2-spec-06"
+        "string": "draft-ietf-dkim-dkim2-spec-07"
       },
       "dkim2.projection_binding_algorithm": {
         "string": "sha-256"
       },
       "dkim2.projection_binding": {
-        "bytes": "mOBskY9a9xU6WI7KYvu5516JdfNHyHP1w5rdLkwslZk="
+        "bytes": "W/qQtmGTRMOYQK+DPPgj1ogfm98huEHF2KGBmk153Z4="
       },
       "dkim2.verification_state": {
         "string": "PASS"
@@ -65,15 +65,6 @@
       "dkim2.local_policy_reason": {
         "string": "protocol_pass"
       },
-      "dkim2.do_not_modify_state": {
-        "string": "not_requested"
-      },
-      "dkim2.do_not_explode_state": {
-        "string": "indeterminate"
-      },
-      "dkim2.dns_testing_effective": {
-        "boolean": false
-      },
       "dkim2.disposition": {
         "string": "accept"
       },
@@ -96,7 +87,7 @@
               {
                 "name": "hop_binding",
                 "value": {
-                  "bytes": "G0pGpIzm4NVVQUBEh0QBSGLYV/bnVho93IxzWA/jm9U="
+                  "bytes": "pteJ94LzSXMj+k7FsrRVvPd6+k3uG/AGGl8UW2WwCSY="
                 }
               },
               {
@@ -124,18 +115,6 @@
                 "name": "custody_transition",
                 "value": {
                   "string": "origin"
-                }
-              },
-              {
-                "name": "do_not_modify",
-                "value": {
-                  "boolean": false
-                }
-              },
-              {
-                "name": "do_not_explode",
-                "value": {
-                  "boolean": true
                 }
               },
               {
