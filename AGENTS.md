@@ -1,6 +1,7 @@
 # Repository rules
 
-This repository hosts the external Nauthilus native Go plugin
+This repository (https://github.com/croessner/nauthilus-dkim2-intelligence)
+hosts the external Nauthilus native Go plugin
 `dkim2-intelligence` (module `dkim2_intelligence`, artifact
 `dkim2-intelligence.so`). These rules are mandatory for every change.
 
@@ -55,3 +56,9 @@ message with the trailer line
 Allowed prefixes: `Add`, `Change`, `Fix`, `Remove`, `Refactor`, `Test`,
 `Docs`, `Build`, `Ci`, `Vendor`, `Security`, `Chore`. Split unrelated work
 into separate commits.
+
+## License
+
+The code is derived from Nauthilus and licensed under GPL-3.0-or-later (see
+`LICENSE`). Keep the existing license headers and do not add code under an
+incompatible license.

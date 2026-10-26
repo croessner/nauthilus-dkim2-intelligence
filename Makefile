@@ -18,7 +18,7 @@ CORE_WORKDIR ?= $(BUILD_DIR)/core
 BUNDLE_COMMIT ?= $(shell git -C $(CURDIR) rev-parse HEAD)
 BUNDLE_BUILD_TIME ?= $(shell git -C $(CURDIR) show -s --format=%cI $(BUNDLE_COMMIT))
 SIGNING_KEY ?= $(HOME)/.config/nauthilus/rns-auth-plugin-signing-key.b64
-IMAGE ?= ghcr.io/croessner/nauthilus-dkim2-intelligence-plugin
+IMAGE ?= ghcr.io/croessner/nauthilus-dkim2-intelligence
 IMAGE_TAG ?= $(CORE_REF)-$(shell git -C $(CURDIR) rev-parse --short HEAD)
 ALLOW_DIRTY ?= 0
 

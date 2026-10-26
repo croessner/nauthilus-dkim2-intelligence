@@ -4,6 +4,10 @@ FROM alpine:3.24
 
 ARG ARTIFACT=dkim2-intelligence.so
 
+LABEL org.opencontainers.image.source="https://github.com/croessner/nauthilus-dkim2-intelligence"
+LABEL org.opencontainers.image.description="Signed dkim2-intelligence native plugin artifact set for one exact Nauthilus release"
+LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
+
 RUN mkdir -p /artifacts
 
 COPY build/${ARTIFACT} /artifacts/${ARTIFACT}

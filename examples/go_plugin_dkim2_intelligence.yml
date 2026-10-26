@@ -1,3 +1,6 @@
+# dkim2-intelligence.so is built and signed by https://github.com/croessner/nauthilus-dkim2-intelligence
+# for one exact Nauthilus release. Pin its checksum, minisign signature and signer
+# (see OPERATOR.md); the artifact must be rebuilt for every Nauthilus release.
 # Module composition fragment: merge modules and reputation target bindings by exact identity.
 # Keep model/source/key configuration from go_plugin_reputation.yml and the complete Policy from policy_dkim2_rspamd_verifier.yml.
 # No provider identity is inferred: configure explicit identity contracts before enabling enforcement.

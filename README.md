@@ -1,19 +1,90 @@
-# nauthilus-dkim2: DKIM2 intelligence native plugin
+# nauthilus-dkim2-intelligence
 
-This repository hosts the Nauthilus native Go plugin `dkim2-intelligence`
-(module and config name `dkim2_intelligence`, artifact
-`dkim2-intelligence.so`). It was moved out of the Nauthilus core repository,
-where it lived as `contrib/plugins/dkim2-intelligence` with the private helper
-package `contrib/plugins/internal/dkim2projection`, up to and including core
-tag `v4.0.1`.
+Correlated DKIM2 verifier, reputation and SMTP-peer intelligence for the
+[Nauthilus](https://github.com/croessner/nauthilus) Policy layer, delivered as
+an external native Go plugin.
 
-- [OPERATOR.md](OPERATOR.md): module configuration, trust chain, rollout and
-  rollback.
-- [AGENTS.md](AGENTS.md): repository rules for contributors and agents.
+- Repository: <https://github.com/croessner/nauthilus-dkim2-intelligence>
+- Plugin module and config name: `dkim2_intelligence`
+- Artifact: `dkim2-intelligence.so` (+ `.sha256`, `.minisig`, `.provenance`)
+- Policy component: `dkim2/plugin.dkim2_intelligence.assessment`
+- Supported DKIM2 protocol: `draft-ietf-dkim-dkim2-spec-07` with the
+  `dkim2.verifier-projection.v1` projection (Draft-06 input is rejected)
+- License: GPL-3.0-or-later (see [LICENSE](LICENSE)); the code is derived from
+  Nauthilus, which is licensed under the GPL-3.0
+
+## Purpose
+
+A DKIM2 verifier (`dkim2d`, called by the Rspamd DKIM2 adapter) sends a sealed
+verifier projection of the authenticated DKIM2 chain to the Nauthilus Policy
+API (`dkim2/accept-message-instance`). This plugin is a fact-only provider: it
+validates that projection, recomputes its SHA-256 bindings byte for byte,
+correlates every signer hop with the preexisting Nauthilus reputation and the
+current SMTP peer GeoIP/ASN evidence, applies explicit operator identity
+contracts and publishes three facts (`assessed_chain`, `smtp_peer`,
+`assessment_complete`) for Policy rules. It never parses messages, verifies
+signatures, stores data, or decides permit/deny itself.
+
+## Relationship to Nauthilus
+
+- The plugin is an external native Go plugin. Go plugins must be built from
+  exactly the same shared packages, toolchain, `GOEXPERIMENT` and build tags as
+  the host, so it is compiled inside a clean clone of the exact Nauthilus
+  release tree (`CORE_REF`), at `contrib/plugins/dkim2-intelligence/`.
+- It uses the Nauthilus packages `pluginapi/v1`,
+  `contrib/plugins/internal/reputationview` and
+  `contrib/plugins/internal/telemetry` from that tree (tests also use
+  `server/...` packages); there is no separate `go.mod`.
+- Release artifacts are signed with minisign using the Nauthilus signing tool
+  (`server/pluginloader/cmd/nauthilus-plugin-sign`) and delivered as an
+  artifact set (optionally in a minimal carrier image) that Nauthilus loads with
+  `verification_policy: signature_required`, a pinned SHA-256 checksum and a
+  trusted signer.
+
+### Compatibility rule
+
+One artifact is valid for exactly one Nauthilus release (core commit, Go
+toolchain, `GOEXPERIMENT=runtimesecret`, `netgo`). Rebuild, re-sign and re-pin
+the checksum for every Nauthilus release, including patch releases; the
+provenance file records the exact inputs. The Nauthilus loader refuses an
+artifact built for another host identity.
+
+| Plugin | DKIM2 draft | Built and tested against |
+|--------|-------------|--------------------------|
+| 0.2.0 | `draft-ietf-dkim-dkim2-spec-07` | Nauthilus `v4.0.1` (default `CORE_REF`); deployment target `v4.0.2` |
+| 0.1.0 | `draft-ietf-dkim-dkim2-spec-06` | bundled in Nauthilus up to `v4.0.1` |
+
+## Quick start
+
+```sh
+# Tests (go test -race), vet, golangci-lint and gofmt inside a v4.0.1 tree
+make check CORE_REPO=/path/to/nauthilus CORE_REF=v4.0.1
+
+# Release build with ABI check, checksum and minisign signature
+make sign CORE_REPO=/path/to/nauthilus CORE_REF=v4.0.2 \
+  SIGNING_KEY=/secure/minisign-key.b64
+```
+
+`make build` needs Docker; the builder image is
+`golang:$(GO_VERSION)-alpine$(ALPINE_VERSION)` and must match the toolchain
+of the selected Nauthilus release.
+
+## Configuration
+
+- [examples/go_plugin_dkim2_intelligence.yml](examples/go_plugin_dkim2_intelligence.yml):
+  module composition fragment (GeoIP, reputation and `dkim2_intelligence`).
+- [examples/policy_dkim2_rspamd_verifier.yml](examples/policy_dkim2_rspamd_verifier.yml):
+  strict reference Policy for `dkim2/accept-message-instance`, including the
+  executable fact and record schemas.
+- [examples/policy_dkim2_observe.yml](examples/policy_dkim2_observe.yml):
+  observation overlay for calibration.
+- [examples/dkim2_rspamd_policy_request_v1.example.json](examples/dkim2_rspamd_policy_request_v1.example.json):
+  a Draft-07 wire request with producer-coherent bindings.
 - [docs/dkim2_rspamd_policy_contract.md](docs/dkim2_rspamd_policy_contract.md):
-  the Rspamd to Nauthilus wire contract this plugin consumes.
-- [examples/](examples/): the reference verifier Policy, the observation
-  overlay, the module composition fragment and a tracked wire request.
+  the wire contract, including the Draft-07 binding encoding.
+- [OPERATOR.md](OPERATOR.md): trust chain, the module entry for the external
+  artifact, the exact production changes for Draft-07, rollout and rollback.
+- [AGENTS.md](AGENTS.md): contribution rules.
 
 ## Repository layout
 
@@ -27,8 +98,10 @@ tag `v4.0.1`.
 | `scripts/in-nauthilus.sh` | Runs test, vet, lint, fmt-check or sign inside a core checkout. |
 | `scripts/build-in-nauthilus.sh` | Release builder executed inside the Go builder container. |
 | `Dockerfile.artifact` | Minimal carrier image for a signed artifact set. |
+| `LICENSE` | GPL-3.0 license text (copied from Nauthilus). |
 
-## Build model
+
+## How the plugin is built
 
 A Go plugin can only be loaded by a host that was built from exactly the same
 shared packages, toolchain, `GOEXPERIMENT` and build tags. This repository
@@ -79,7 +152,7 @@ at `SIGNING_KEY` (default
 `$(HOME)/.config/nauthilus/rns-auth-plugin-signing-key.b64`). The key is never
 printed, copied into the build tree or committed.
 
-## Make targets
+## Make targets and variables
 
 | Target | Effect |
 |--------|--------|
@@ -111,7 +184,7 @@ printed, copied into the build tree or committed.
 | `ARTIFACT` | `dkim2-intelligence.so` | Artifact file name. |
 | `BUNDLE_COMMIT` / `BUNDLE_BUILD_TIME` | `HEAD` and its commit time | Provenance; never the wall clock. |
 | `SIGNING_KEY` | `$(HOME)/.config/nauthilus/rns-auth-plugin-signing-key.b64` | Minisign private key file. |
-| `IMAGE` / `IMAGE_TAG` | `ghcr.io/croessner/nauthilus-dkim2-intelligence-plugin` / `$(CORE_REF)-<short sha>` | Carrier image name. |
+| `IMAGE` / `IMAGE_TAG` | `ghcr.io/croessner/nauthilus-dkim2-intelligence` / `$(CORE_REF)-<short sha>` | Carrier image name. |
 | `ALLOW_DIRTY` | `0` | Set to `1` to build from a dirty worktree (provenance is then not release evidence). |
 
 Example for the deployment target:
@@ -139,7 +212,7 @@ The independent normative fixture is `testdata/record-contract.json`; the
 executable field schema is in
 `examples/policy_dkim2_rspamd_verifier.yml`.
 
-## Input authority and correlation
+### Input authority and correlation
 
 The generic host must bind the exact configured reputation and geographic
 components, declare their output schemas and schedule both before this
@@ -169,7 +242,7 @@ reputation lookup. `assessment_complete=true` means structurally complete
 correlation, including explicit unavailable states; it is not a trust or
 permission result.
 
-## Configuration
+### Configuration semantics
 
 Merge the module composition fragment by module and target-binding identity
 with the generic reputation configuration. The canonical verifier Policy owns
@@ -202,7 +275,7 @@ carry fabricated location or ASN details. Geographic freshness is determined
 by the generic GeoIP provider's opened database snapshot and configured age
 limits. The composer does not refresh databases or perform network lookups.
 
-## Privacy and validation
+### Privacy and validation
 
 The output excludes raw IP duplication, subject tags, message headers or
 values, bodies, keys, selectors, signatures, Recipe payloads and recipe
@@ -219,7 +292,7 @@ provider integration and native-bundle checks. `make build` proves the actual
 native load contract against the exact `CORE_REF` host with the core's
 `server/pluginloader/testdata/nativebundle` checker.
 
-## Operational telemetry
+### Operational telemetry
 
 The host-scoped `composition_total` counter has one additional `result` label:
 `completed`, `unavailable`, `projection_invalid`, `reputation_invalid`,
@@ -228,3 +301,19 @@ the actual enrichment callback and never labels signers, peer addresses, hop
 identities, Recipe data or caller input. `completed` means composition passed
 its contract checks; the selected Policy still owns the delivery decision.
 Exporter failure does not change composition results.
+
+## History
+
+- Up to Nauthilus `v4.0.1` the plugin lived in the Nauthilus core repository as
+  `contrib/plugins/dkim2-intelligence` (with the private helper package
+  `contrib/plugins/internal/dkim2projection`) and was built, signed and shipped
+  inside the Nauthilus image, implementing DKIM2 Draft-06.
+- Starting with Nauthilus `v4.0.2` it is maintained here as an external plugin.
+  The first commit imports the unmodified `v4.0.1` sources; the projection
+  package became the `projection` subpackage.
+- Plugin `0.2.0` ports the contract to `draft-ietf-dkim-dkim2-spec-07`
+  (see [OPERATOR.md](OPERATOR.md) for the exact contract changes).
+
+## License
+
+GPL-3.0-or-later. See [LICENSE](LICENSE). Copyright (C) 2026 Christian Roessner.
