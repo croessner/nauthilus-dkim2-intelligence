@@ -45,8 +45,11 @@ loaded. Never relax `verification_policy: signature_required` to proceed.
 The plugin implements `draft-ietf-dkim-dkim2-spec-07` only. It must be rolled
 out together with the Draft-07 Rspamd DKIM2 adapter and a Draft-07 `dkim2d`;
 any Draft-06 request (draft literal, removed facts, removed hop fields or
-Draft-06 bindings) is rejected with `invalid_input`, which the reference
-Policy turns into `deny_incomplete_assessment`.
+Draft-06 bindings) is rejected with `invalid_input` and no facts. The core
+treats every error class of this required provider as a provider failure, so
+the decision is `indeterminate` with status `provider_unavailable` (marked
+retryable by the core); it is never permitted. `deny_incomplete_assessment`
+only applies when the plugin completes with `assessment_complete: false`.
 
 What changed on the wire:
 
