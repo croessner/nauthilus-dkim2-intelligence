@@ -46,6 +46,9 @@ hosts the external Nauthilus native Go plugin
   Metric labels stay on the bounded `result` vocabulary.
 - Keep `examples/`, `testdata/record-contract.json` and `schema.go` in sync;
   the tests enforce this.
+- `policytest/` drives the reference Policy through the core's compiled
+  scheduler. Deployments reuse it with `NAUTHILUS_DKIM2_POLICY_FILE` pointing
+  at their own Policy document; keep its build tag and the override stable.
 
 ## Commits
 

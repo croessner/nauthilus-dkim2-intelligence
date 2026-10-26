@@ -22,6 +22,8 @@ export GOEXPERIMENT="${GOEXPERIMENT:-runtimesecret}"
 
 plugin_path="contrib/plugins/dkim2-intelligence"
 plugin_pkgs="./${plugin_path}/..."
+harness_pkg="server/policy/decision/service"
+harness_tag="dkim2policyharness"
 
 if [ "${INSTALL_PACKAGES:-0}" = "1" ]; then
 	apk add --no-cache build-base git rsync >/dev/null
@@ -53,6 +55,13 @@ sync_plugin() {
 		"${PLUGIN_DIR}/" "${CORE_WORKDIR}/${plugin_path}/"
 }
 
+# install_policy_harness copies the build-tagged DKIM2 Policy scenario harness
+# into the core decision service package, whose unexported runtime it drives.
+# The files only compile with harness_tag, so a plain core build ignores them.
+install_policy_harness() {
+	cp "${PLUGIN_DIR}"/policytest/*_test.go "${CORE_WORKDIR}/${harness_pkg}/"
+}
+
 prepare_core
 
 case "${action}" in
@@ -76,9 +85,14 @@ echo "core ref ${CORE_REF} ($(git rev-parse HEAD)), $(${GO} version)"
 case "${action}" in
 	test)
 		"${GO}" test -mod=vendor -tags="${GO_TAGS}" -race -count=1 ${plugin_pkgs}
+		install_policy_harness
+		"${GO}" test -mod=vendor -tags="${GO_TAGS},${harness_tag}" -race -count=1 \
+			-run '^TestDKIM2CorrelatedPolicyScenarios$' ./${harness_pkg}
 		;;
 	vet)
 		"${GO}" vet -mod=vendor -tags="${GO_TAGS}" ${plugin_pkgs}
+		install_policy_harness
+		"${GO}" vet -mod=vendor -tags="${GO_TAGS},${harness_tag}" ./${harness_pkg}
 		;;
 	lint)
 		"${GOLANGCI_LINT}" run --build-tags="${GO_TAGS}" \

@@ -94,6 +94,7 @@ of the selected Nauthilus release.
 | `projection/` | Verifier projection decoding and binding recomputation (formerly `contrib/plugins/internal/dkim2projection`). |
 | `testdata/record-contract.json` | Normative output record contract fixture. |
 | `examples/` | Reference Policy, module fragment, observation overlay and wire request; the tests load them. |
+| `policytest/` | Build-tagged (`dkim2policyharness`) end-to-end Policy scenarios; copied into the core decision service package to drive its compiled scheduler with the reference Policy. |
 | `docs/` | Wire contract documentation. |
 | `scripts/in-nauthilus.sh` | Runs test, vet, lint, fmt-check or sign inside a core checkout. |
 | `scripts/build-in-nauthilus.sh` | Release builder executed inside the Go builder container. |
@@ -156,7 +157,7 @@ printed, copied into the build tree or committed.
 
 | Target | Effect |
 |--------|--------|
-| `make test` | `go test -race -count=1` for the plugin and `projection` inside the core checkout (local toolchain). |
+| `make test` | `go test -race -count=1` for the plugin and `projection`, then the `policytest/` Policy scenarios against `examples/policy_dkim2_rspamd_verifier.yml`, inside the core checkout (local toolchain). |
 | `make test-docker` | Same tests inside the exact release builder image. |
 | `make vet` | `go vet` inside the core checkout. |
 | `make lint` | `golangci-lint` with the core `.golangci.yml` and the core guardrail linters. |
