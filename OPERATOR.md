@@ -40,6 +40,54 @@ If a core image still bundles its own copy at the same path, the mount
 replaces it; the checksum and signer pin make sure the intended artifact is
 loaded. Never relax `verification_policy: signature_required` to proceed.
 
+## DKIM2 Draft-08 contract (plugin 0.3.0)
+
+The plugin implements `draft-ietf-dkim-dkim2-spec-08` only. It must be rolled
+out together with the Draft-08 Rspamd DKIM2 adapter and a Draft-08 `dkim2d`;
+a Draft-07 or Draft-06 request (draft literal or bindings) is rejected with
+`invalid_input` and no facts, which the core reports as `indeterminate` with
+status `provider_unavailable`, exactly as described for Draft-07 below.
+
+What changed on the wire:
+
+- `resource.dkim2.draft` is `draft-ietf-dkim-dkim2-spec-08`. The projection
+  binding frames the draft literal, so every Draft-07 binding value differs;
+  the frame layout and the record fields are unchanged (21 hop fields).
+- `resource.dkim2.verification_reason` and
+  `resource.dkim2.authentication_reason` are closed vocabularies bound to
+  their states (Draft-08 Section 14.1). New reasons: `custody_mismatch` and
+  `body_history_unavailable` (FAIL), `invalid_recipe` (PERMERROR);
+  `timestamp_invalid`, `envelope_mismatch`, `domain_alignment_mismatch`,
+  `next_domain_mismatch`, `out_of_band_required` and `from_not_authentic`
+  moved from PERMERROR to FAIL; `too_many_signatures` is gone. A projection
+  exists only for verification PASS, whose only reason is `none`; a PASS
+  projection carrying any other reason is now rejected. Authentication must
+  repeat the verification result, except replay `replayed`
+  (FAIL `duplicate_message_without_exploded`) and `indeterminate`
+  (TEMPERROR `replay_indeterminate` or `replay_evidence_unavailable`).
+- Hop `signature_algorithms` admits `mldsa44` (pure ML-DSA-44, Section 3.4).
+  The Draft-07 composite `mldsa44-ed25519-sha512` is rejected.
+- The optional `resource.dkim2.received_dsn_propagation` admits
+  `forbidden_identity_misaligned` (29 characters, within the reference
+  `max_length: 30`). The `/v1/dsn/sign` unsigned reasons
+  (`delivery_status_identity_unavailable`, `delivery_status_from_not_authentic`)
+  are a `dkim2d` REST header and never part of the projection.
+- Per-set selectors and `|` groups in `s=` stay inside `dkim2d`; the
+  projection carries neither.
+
+The plugin output (`assessed_chain`, `smtp_peer`, `assessment_complete`) is
+unchanged.
+
+### Required production configuration changes
+
+None for the Policy document: the reference
+`examples/policy_dkim2_rspamd_verifier.yml` keeps its schemas, allowlist and
+rules (every non-PASS verification or authentication result is still denied
+by `deny_nonpass_verifier_state` or `deny_nonpass_authentication`). Update
+`config.d/55-go-plugins.yml` (`checksum` of the new artifact) and roll out the
+plugin, the Draft-08 Rspamd adapter and the Draft-08 `dkim2d` together; a
+mixed Draft-07/Draft-08 deployment fails closed.
+
 ## DKIM2 Draft-07 contract (plugin 0.2.0)
 
 The plugin implements `draft-ietf-dkim-dkim2-spec-07` only. It must be rolled

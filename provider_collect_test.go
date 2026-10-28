@@ -106,7 +106,7 @@ func assertCompositionMetrics(t *testing.T, metricRegistry *prometheus.Registry)
 	}
 }
 
-// trackedRequest decodes this repository's Draft-07 wire fixture (never the core copy) into immutable public test inputs.
+// trackedRequest decodes this repository's Draft-08 wire fixture (never the core copy) into immutable public test inputs.
 func trackedRequest(t *testing.T) pluginapi.DecisionFactRequest {
 	t.Helper()
 

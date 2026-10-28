@@ -1,17 +1,31 @@
 package projection
 
 import (
-	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
+	"slices"
 	"testing"
+
+	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-// TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation preserves the shipped optional wire fact without widening vocabulary.
+// TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation admits exactly the Draft-08 propagation vocabulary;
+// the dkim2d /v1/dsn/sign unsigned reasons are a REST header, never a projection value.
 func TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation(t *testing.T) {
-	for _, state := range []string{"not_applicable", "eligible", "terminal_origin", "not_failure", "forbidden_null_previous_sender", "unsupported_chain", "not_reconstructable", "not_evaluated", "unknown"} {
+	want := []string{
+		"not_applicable", "eligible", "terminal_origin", "not_failure", "forbidden_null_previous_sender",
+		"forbidden_identity_misaligned", "unsupported_chain", "not_reconstructable", "not_evaluated",
+	}
+	if !slices.Equal(receivedDSNPropagations, want) {
+		t.Fatalf("receivedDSNPropagations = %v, want %v", receivedDSNPropagations, want)
+	}
+
+	rejected := []string{"unknown", "unsigned_original", "delivery_status_identity_unavailable", "delivery_status_from_not_authentic", ""}
+	states := append(slices.Clone(receivedDSNPropagations), rejected...)
+
+	for _, state := range states {
 		request := appendRequestFact(t, testDecisionRequest(t, "192.0.2.25"), testFact(t, "resource.dkim2.received_dsn_propagation", pluginapi.DecisionFactCategoryResource, testStringValue(t, state)))
 
 		_, err := Decode(request)
-		if (err == nil) != (state != "unknown") {
+		if (err == nil) == slices.Contains(rejected, state) {
 			t.Fatalf("optional DSN %s: %v", state, err)
 		}
 	}

@@ -56,7 +56,8 @@ func TestDKIM2CorrelatedPolicyScenarios(t *testing.T) {
 }
 
 // dkim2PolicyCases fixes positive, same-hop, current-target, availability and invariant precedence vectors
-// for the Draft-07 verifier contract, including the non-replay not_eligible class.
+// for the Draft-08 verifier contract, including the non-replay not_eligible class and coherent Draft-08
+// Section 14.1 verification and replay authentication results.
 func dkim2PolicyCases() []dkim2PolicyCase {
 	no := false
 
@@ -92,6 +93,48 @@ func dkim2PolicyCases() []dkim2PolicyCase {
 
 	for _, tc := range []struct{ fact, value, rule string }{{"verification_state", "FAIL", "deny_nonpass_verifier_state"}, {"authentication_state", "FAIL", "deny_nonpass_authentication"}, {"replay_class", "replayed", "deny_replay"}, {"custody_structure", "terminal_nd_requires_oob", "deny_terminal_nd"}, {"local_policy_verdict", "reject", "deny_noncontinuable_local_verdict"}, {"disposition", "reject", "deny_noncontinuable_disposition"}} {
 		result = append(result, dkim2PolicyCase{name: tc.rule, facts: map[string]any{"resource.dkim2." + tc.fact: tc.value}, wantRule: tc.rule})
+	}
+
+	result = append(result, dkim2Draft08ResultCases()...)
+
+	return result
+}
+
+// dkim2Draft08ResultCases pairs each Draft-08 state with a reason the producer reports for it.
+// Verification failures carry the same authentication result and an unchecked replay class;
+// replay failures keep a PASS verification. Every non-PASS result must be denied.
+func dkim2Draft08ResultCases() []dkim2PolicyCase {
+	result := []dkim2PolicyCase{}
+
+	for _, tc := range []struct{ state, reason string }{
+		{"FAIL", "custody_mismatch"}, {"FAIL", "body_history_unavailable"}, {"FAIL", "from_not_authentic"},
+		{"FAIL", "timestamp_invalid"}, {"FAIL", "out_of_band_required"}, {"PERMERROR", "invalid_recipe"},
+		{"TEMPERROR", "provider_temporary"},
+	} {
+		result = append(result, dkim2PolicyCase{
+			name: "Draft-08 verification " + tc.state + " " + tc.reason,
+			facts: map[string]any{
+				"resource.dkim2.verification_state": tc.state, "resource.dkim2.verification_reason": tc.reason,
+				"resource.dkim2.authentication_state": tc.state, "resource.dkim2.authentication_reason": tc.reason,
+				"resource.dkim2.replay_class": "not_checked",
+			},
+			wantRule: "deny_nonpass_verifier_state",
+		})
+	}
+
+	for _, tc := range []struct{ replay, state, reason string }{
+		{"replayed", "FAIL", "duplicate_message_without_exploded"},
+		{"indeterminate", "TEMPERROR", "replay_indeterminate"},
+		{"indeterminate", "TEMPERROR", "replay_evidence_unavailable"},
+	} {
+		result = append(result, dkim2PolicyCase{
+			name: "Draft-08 replay " + tc.replay + " " + tc.reason,
+			facts: map[string]any{
+				"resource.dkim2.replay_class": tc.replay, "resource.dkim2.authentication_state": tc.state,
+				"resource.dkim2.authentication_reason": tc.reason,
+			},
+			wantRule: "deny_nonpass_authentication",
+		})
 	}
 
 	return result

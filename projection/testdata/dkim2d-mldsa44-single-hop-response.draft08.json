@@ -1,0 +1,59 @@
+{
+  "api_version": "v1",
+  "draft": "draft-ietf-dkim-dkim2-spec-08",
+  "verification": {
+    "state": "PASS",
+    "primary_reason": "none",
+    "scope": "chain",
+    "historical_content": "complete",
+    "historical_signatures": "complete",
+    "custody_structure": "not_present",
+    "target": {"sequence": "1", "instance": "2"},
+    "checks": [{"class": "protocol", "reason": "none"}],
+    "signature_sets": []
+  },
+  "authentication": {"state": "PASS", "primary_reason": "none"},
+  "policy": {
+    "mode": "strict",
+    "verdict": "continue",
+    "primary_reason": "protocol_pass",
+    "feedback": {
+      "requested": false,
+      "relay_required": false,
+      "history_coverage": "complete"
+    },
+    "findings": [{"reason": "protocol_pass", "severity": "info"}]
+  },
+  "replay": {"class": "first_seen"},
+  "disposition": "continue",
+  "actions": [],
+  "verifier_projection": {
+    "schema": "dkim2.verifier-projection.v1",
+    "draft": "draft-ietf-dkim-dkim2-spec-08",
+    "binding_algorithm": "sha-256",
+    "binding": "xnp5A4STSsAtTowarX/+WeVpHEZJo28yBW/66ObyjXo=",
+    "hops": [{
+      "sequence": "1",
+      "message_instance": "2",
+      "hop_binding": "sCGp1qIw9Hin5vnAhBCo5O/VdJI+YZs9oJn9rGv5r3g=",
+      "signer_domain": "example.test",
+      "signature_algorithms": ["ed25519-sha256", "mldsa44", "rsa-sha256"],
+      "signature_state": "pass",
+      "custody_transition": "origin",
+      "feedback": true,
+      "feed_here": false,
+      "exploded": false,
+      "recipe_mode": "applied",
+      "recipe_has_header_changes": true,
+      "recipe_body_mode": "steps",
+      "recipe_digest": "sciPR7Tn1MkjmO+sjFlTgwkNuFWcwbygwqnUTvzXqu4=",
+      "change_classes": ["body.rewrite", "header.rewrite"],
+      "affected_headers": ["subject", "x-trace"],
+      "history_header_state": "matched",
+      "history_body_state": "matched",
+      "body_availability": "known",
+      "change_count": 2,
+      "affected_header_count": 2
+    }]
+  }
+}

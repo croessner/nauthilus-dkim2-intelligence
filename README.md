@@ -8,8 +8,9 @@ an external native Go plugin.
 - Plugin module and config name: `dkim2_intelligence`
 - Artifact: `dkim2-intelligence.so` (+ `.sha256`, `.minisig`, `.provenance`)
 - Policy component: `dkim2/plugin.dkim2_intelligence.assessment`
-- Supported DKIM2 protocol: `draft-ietf-dkim-dkim2-spec-07` with the
-  `dkim2.verifier-projection.v1` projection (Draft-06 input is rejected)
+- Supported DKIM2 protocol: `draft-ietf-dkim-dkim2-spec-08` with the
+  `dkim2.verifier-projection.v1` projection (Draft-06 and Draft-07 input is
+  rejected)
 - License: GPL-3.0-or-later (see [LICENSE](LICENSE)); the code is derived from
   Nauthilus, which is licensed under the GPL-3.0
 
@@ -51,7 +52,8 @@ artifact built for another host identity.
 
 | Plugin | DKIM2 draft | Built and tested against |
 |--------|-------------|--------------------------|
-| 0.2.0 | `draft-ietf-dkim-dkim2-spec-07` | Nauthilus `v4.0.2` (default `CORE_REF`) |
+| 0.3.0 | `draft-ietf-dkim-dkim2-spec-08` | Nauthilus `v4.0.2` (default `CORE_REF`) |
+| 0.2.0 | `draft-ietf-dkim-dkim2-spec-07` | Nauthilus `v4.0.2` |
 | 0.1.0 | `draft-ietf-dkim-dkim2-spec-06` | bundled in Nauthilus up to `v4.0.1` |
 
 ## Quick start
@@ -314,6 +316,8 @@ Exporter failure does not change composition results.
   package became the `projection` subpackage.
 - Plugin `0.2.0` ports the contract to `draft-ietf-dkim-dkim2-spec-07`
   (see [OPERATOR.md](OPERATOR.md) for the exact contract changes).
+- Plugin `0.3.0` ports the contract to `draft-ietf-dkim-dkim2-spec-08`
+  (see [OPERATOR.md](OPERATOR.md)).
 
 ## License
 

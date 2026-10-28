@@ -111,7 +111,7 @@ func CalculateBoundHopBinding(projection [sha256.Size]byte, hop Hop) [sha256.Siz
 	return sha256.Sum256(frame)
 }
 
-// appendBindingFlags writes the authenticated Draft-07 flags in the producer's fixed order.
+// appendBindingFlags writes the authenticated Draft-07 and Draft-08 flags in the producer's fixed order.
 // Draft-07 Section 10.10 removed donotmodify and donotexplode, so only feedback,
 // feedhere and exploded are framed; Draft-06 bindings therefore never validate.
 func appendBindingFlags(output []byte, hop Hop) []byte {

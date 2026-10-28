@@ -12,13 +12,13 @@
         "string": "dkim2.verifier-projection.v1"
       },
       "dkim2.draft": {
-        "string": "draft-ietf-dkim-dkim2-spec-07"
+        "string": "draft-ietf-dkim-dkim2-spec-08"
       },
       "dkim2.projection_binding_algorithm": {
         "string": "sha-256"
       },
       "dkim2.projection_binding": {
-        "bytes": "W/qQtmGTRMOYQK+DPPgj1ogfm98huEHF2KGBmk153Z4="
+        "bytes": "WZjCjtZ6Pw2CYn/LGlOoDST1EUEmsoiyOtQzvFvfugk="
       },
       "dkim2.verification_state": {
         "string": "PASS"
@@ -87,7 +87,7 @@
               {
                 "name": "hop_binding",
                 "value": {
-                  "bytes": "pteJ94LzSXMj+k7FsrRVvPd6+k3uG/AGGl8UW2WwCSY="
+                  "bytes": "X6+AZC7JMT43e9oqbUKEyjv+uCkdnjiVXbvL3rFmsoY="
                 }
               },
               {

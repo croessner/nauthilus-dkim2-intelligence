@@ -14,16 +14,27 @@ import (
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-// TestVerifierProjectionAcceptsExactDraft07ReplayClasses pins the closed Draft-07 replay vocabulary.
-func TestVerifierProjectionAcceptsExactDraft07ReplayClasses(t *testing.T) {
+// TestVerifierProjectionAcceptsExactDraft08ReplayClasses pins the closed Draft-08 replay vocabulary,
+// each with the authentication result the producer pairs with that class.
+func TestVerifierProjectionAcceptsExactDraft08ReplayClasses(t *testing.T) {
 	want := []string{"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate"}
 	if !slices.Equal(replayClasses, want) {
 		t.Fatalf("replayClasses = %v, want %v", replayClasses, want)
 	}
 
+	authentication := map[string][2]string{
+		"replayed":      {"FAIL", "duplicate_message_without_exploded"},
+		"indeterminate": {"TEMPERROR", "replay_indeterminate"},
+	}
+
 	for _, class := range want {
 		t.Run(class, func(t *testing.T) {
 			request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), "resource.dkim2.replay_class", class)
+			if result, exists := authentication[class]; exists {
+				request = replaceRequestStringFact(t, request, "resource.dkim2.authentication_state", result[0])
+				request = replaceRequestStringFact(t, request, "resource.dkim2.authentication_reason", result[1])
+			}
+
 			if _, err := Decode(request); err != nil {
 				t.Fatalf("Decode() error = %v for replay class %q", err, class)
 			}
@@ -31,7 +42,7 @@ func TestVerifierProjectionAcceptsExactDraft07ReplayClasses(t *testing.T) {
 	}
 }
 
-// TestVerifierProjectionRejectsUnknownReplayClass fails closed on replay classes outside Draft-07.
+// TestVerifierProjectionRejectsUnknownReplayClass fails closed on replay classes outside Draft-08.
 func TestVerifierProjectionRejectsUnknownReplayClass(t *testing.T) {
 	for _, class := range []string{"eligible", "NOT_ELIGIBLE", ""} {
 		request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), "resource.dkim2.replay_class", class)

@@ -9,13 +9,12 @@ package projection
 
 import (
 	"encoding/base64"
-	"encoding/json"
-	"os"
 	"testing"
 )
 
 type bindingGolden struct {
-	Hop struct {
+	Draft string `json:"draft"`
+	Hop   struct {
 		SignerDomain        string   `json:"signer_domain"`
 		SignatureAlgorithms []string `json:"signature_algorithms"`
 		SignatureState      string   `json:"signature_state"`
@@ -44,9 +43,14 @@ type bindingGolden struct {
 	} `json:"expected"`
 }
 
-// TestBindingMatchesDKIM2ProducerGolden recomputes the Draft-07 producer vector byte for byte.
+// TestBindingMatchesDKIM2ProducerGolden recomputes the Draft-08 producer vector byte for byte.
+// The golden is a verbatim copy of the dkim2 testdata/reference/verifier-projection-v1-binding.json.
 func TestBindingMatchesDKIM2ProducerGolden(t *testing.T) {
 	fixture := readBindingGolden(t)
+	if fixture.Draft != DraftVersion {
+		t.Fatalf("golden draft = %q, want %q", fixture.Draft, DraftVersion)
+	}
+
 	hop := goldenHop(t, fixture)
 	recipe := CalculateRecipeDescriptorDigest(hop)
 	hop.RecipeDigest = recipe[:]
@@ -102,17 +106,7 @@ func TestBindingRejectsEveryBoundSemanticMutation(t *testing.T) {
 func readBindingGolden(t *testing.T) bindingGolden {
 	t.Helper()
 
-	payload, err := os.ReadFile("testdata/verifier-projection-v1-binding.json")
-	if err != nil {
-		t.Fatalf("ReadFile() error = %v", err)
-	}
-
-	var fixture bindingGolden
-	if err = json.Unmarshal(payload, &fixture); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-
-	return fixture
+	return readBindingGoldenFile(t, "testdata/verifier-projection-v1-binding.json")
 }
 
 // goldenHop maps the shared JSON fields into the plugin's immutable semantic model.

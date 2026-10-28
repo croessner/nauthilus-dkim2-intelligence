@@ -12,28 +12,37 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"slices"
 	"strconv"
 	"testing"
 
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-// Draft-07 producer fixtures.
+// Draft-08 producer fixtures.
 //
-// dkim2d-two-hop-response.draft07.json is a byte-for-byte copy of the real
-// dkim2d Draft-07 /v1/process response used by the Mailstack Rspamd policy
-// end-to-end suite (runtime/rspamd/dkim2/tests/policy-e2e/dkim2-two-hop-response.json).
-// Its bindings are locked against the dkim2 library's own producer functions.
+// The dkim2d-*.draft08.json responses come from the dkim2 reference
+// implementation (dkim2 commit a73b2628cd5d4b0f1aee7bab315fe3bc081f5aee).
+// The two-hop and single-hop files are its contrib/rspamd/tests/policy-e2e
+// dkim2-two-hop-response.json and dkim2-response.json with the projection and
+// hop bindings recomputed by the producer's own verifierProjectionBinding and
+// verifierBoundHopBinding; the ML-DSA-44 file is the single-hop response with
+// the Draft-08 Section 3.4 mldsa44 algorithm added to the hop. Each file passes
+// the producer's TestPolicyE2ETwoHopProjectionBinding lock test, including its
+// VerifierProjection.Valid() check.
 //
-// dkim2d-single-hop-response.draft07.json is the Mailstack single-hop
-// response with its projection and hop bindings recomputed under Draft-07;
-// the values were verified with the dkim2 library producer functions
-// (verifierProjectionBinding/verifierBoundHopBinding) for the same hop.
+// The verifier-projection-v1-binding.draft06.json and .draft07.json vectors
+// are the producer goldens of the previous drafts and stay as negatives.
 const (
-	draft07TwoHopFixture    = "testdata/dkim2d-two-hop-response.draft07.json"
-	draft07SingleHopFixture = "testdata/dkim2d-single-hop-response.draft07.json"
+	draft08TwoHopFixture    = "testdata/dkim2d-two-hop-response.draft08.json"
+	draft08SingleHopFixture = "testdata/dkim2d-single-hop-response.draft08.json"
+	draft08MLDSA44Fixture   = "testdata/dkim2d-mldsa44-single-hop-response.draft08.json"
 	draft06BindingFixture   = "testdata/verifier-projection-v1-binding.draft06.json"
+	draft07BindingFixture   = "testdata/verifier-projection-v1-binding.draft07.json"
 )
+
+// draft08ProducerFixtures lists every Draft-08 producer response fixture.
+var draft08ProducerFixtures = []string{draft08TwoHopFixture, draft08SingleHopFixture, draft08MLDSA44Fixture}
 
 // producerResponse is the subset of a dkim2d response that the Rspamd adapter maps into Policy facts.
 type producerResponse struct {
@@ -73,8 +82,8 @@ type producerHopField struct {
 	kind pluginapi.DecisionValueKind
 }
 
-// draft07HopFields mirrors projection_hop_record of the Draft-07 Rspamd adapter.
-var draft07HopFields = []producerHopField{
+// draft08HopFields mirrors projection_hop_record of the Draft-08 Rspamd adapter.
+var draft08HopFields = []producerHopField{
 	{"sequence", pluginapi.DecisionValueKindInteger},
 	{"message_instance", pluginapi.DecisionValueKindInteger},
 	{"hop_binding", pluginapi.DecisionValueKindBytes},
@@ -106,13 +115,13 @@ type producerRequestOptions struct {
 	extraHopValues  map[string]json.RawMessage
 }
 
-// TestDraft07ProducerResponsesDecode proves that real Draft-07 dkim2d projections pass the complete decoder.
-func TestDraft07ProducerResponsesDecode(t *testing.T) {
-	for _, path := range []string{draft07TwoHopFixture, draft07SingleHopFixture} {
+// TestDraft08ProducerResponsesDecode proves that real Draft-08 dkim2d projections pass the complete decoder.
+func TestDraft08ProducerResponsesDecode(t *testing.T) {
+	for _, path := range draft08ProducerFixtures {
 		t.Run(path, func(t *testing.T) {
 			response := readProducerResponse(t, path)
-			if response.VerifierProjection.Draft != "draft-ietf-dkim-dkim2-spec-07" {
-				t.Fatalf("fixture draft = %q, want Draft-07", response.VerifierProjection.Draft)
+			if response.VerifierProjection.Draft != "draft-ietf-dkim-dkim2-spec-08" {
+				t.Fatalf("fixture draft = %q, want Draft-08", response.VerifierProjection.Draft)
 			}
 
 			decoded, err := Decode(producerRequest(t, response, producerRequestOptions{}))
@@ -132,9 +141,9 @@ func TestDraft07ProducerResponsesDecode(t *testing.T) {
 	}
 }
 
-// TestDraft07BindingsMatchProducerByteForByte recomputes every Draft-07 producer digest independently of Decode.
-func TestDraft07BindingsMatchProducerByteForByte(t *testing.T) {
-	for _, path := range []string{draft07TwoHopFixture, draft07SingleHopFixture} {
+// TestDraft08BindingsMatchProducerByteForByte recomputes every Draft-08 producer digest independently of Decode.
+func TestDraft08BindingsMatchProducerByteForByte(t *testing.T) {
+	for _, path := range draft08ProducerFixtures {
 		t.Run(path, func(t *testing.T) {
 			response := readProducerResponse(t, path)
 			hops := producerHops(t, response)
@@ -157,9 +166,47 @@ func TestDraft07BindingsMatchProducerByteForByte(t *testing.T) {
 	}
 }
 
-// TestDraft07ReplayNotEligibleIsAdmitted accepts the Draft-07 replay class for originator-only PASS messages.
-func TestDraft07ReplayNotEligibleIsAdmitted(t *testing.T) {
-	response := readProducerResponse(t, draft07SingleHopFixture)
+// TestDraft08SingleHopFixtureMatchesBindingGolden ties the response fixture to the producer's reference golden.
+func TestDraft08SingleHopFixtureMatchesBindingGolden(t *testing.T) {
+	response := readProducerResponse(t, draft08SingleHopFixture)
+	golden := readBindingGoldenFile(t, "testdata/verifier-projection-v1-binding.json")
+
+	if response.VerifierProjection.Binding != golden.Expected.Projection ||
+		string(response.VerifierProjection.Hops[0]["hop_binding"]) != strconv.Quote(golden.Expected.BoundHop) {
+		t.Fatal("single-hop response bindings differ from the producer reference golden")
+	}
+}
+
+// TestDraft08MLDSA44HopAlgorithmIsAdmitted proves the Draft-08 pure ML-DSA-44 algorithm reaches composition.
+func TestDraft08MLDSA44HopAlgorithmIsAdmitted(t *testing.T) {
+	decoded, err := Decode(producerRequest(t, readProducerResponse(t, draft08MLDSA44Fixture), producerRequestOptions{}))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	if !slices.Contains(decoded.Chain[0].SignatureAlgorithms, "mldsa44") {
+		t.Fatalf("decoded algorithms = %v, want mldsa44", decoded.Chain[0].SignatureAlgorithms)
+	}
+}
+
+// TestDraft08SignatureAlgorithmVocabulary pins the closed OpenAPI VerifierHop algorithm enum.
+func TestDraft08SignatureAlgorithmVocabulary(t *testing.T) {
+	for _, algorithm := range []string{"ed25519-sha256", "ed25519-sha512", "mldsa44", "rsa-sha256", "rsa-sha512"} {
+		if !allowedSignatureAlgorithm(algorithm) {
+			t.Fatalf("allowedSignatureAlgorithm(%q) = false", algorithm)
+		}
+	}
+
+	for _, algorithm := range []string{"mldsa44-ed25519-sha512", "mldsa44-ed25519-sha256", "MLDSA44", "ml-dsa-44", "unknown", ""} {
+		if allowedSignatureAlgorithm(algorithm) {
+			t.Fatalf("allowedSignatureAlgorithm(%q) = true", algorithm)
+		}
+	}
+}
+
+// TestDraft08ReplayNotEligibleIsAdmitted accepts the replay class for originator-only PASS messages.
+func TestDraft08ReplayNotEligibleIsAdmitted(t *testing.T) {
+	response := readProducerResponse(t, draft08SingleHopFixture)
 	response.Replay.Class = "not_eligible"
 
 	if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err != nil {
@@ -167,29 +214,124 @@ func TestDraft07ReplayNotEligibleIsAdmitted(t *testing.T) {
 	}
 }
 
-// TestDraft07NonPassVerificationFailsClosed keeps Draft-07 failure reasons such as from_not_authentic out of composition.
-func TestDraft07NonPassVerificationFailsClosed(t *testing.T) {
-	response := readProducerResponse(t, draft07SingleHopFixture)
-	response.Verification.State = "FAIL"
-	response.Verification.PrimaryReason = "from_not_authentic"
+// TestDraft08VerificationReasonStates pins the Draft-08 Section 14.1 state of every OpenAPI verification reason.
+func TestDraft08VerificationReasonStates(t *testing.T) {
+	want := map[string][]string{
+		"PASS":      {"none"},
+		"TEMPERROR": {"provider_temporary"},
+		"FAIL": {
+			"hash_mismatch", "signature_mismatch", "timestamp_invalid", "envelope_mismatch",
+			"domain_alignment_mismatch", "next_domain_mismatch", "custody_mismatch",
+			"out_of_band_required", "from_not_authentic", "body_history_unavailable",
+		},
+		"PERMERROR": {
+			"limit_exceeded", "malformed_message", "malformed_protocol", "duplicate_hash_algorithm",
+			"invalid_recipe_json", "invalid_recipe", "duplicate_selector", "missing_protocol",
+			"sequence_invalid", "unsupported_algorithm", "missing_key", "invalid_key", "ambiguous_key",
+			"revoked_key", "unsupported_key_type", "key_algorithm_mismatch", "provider_permanent",
+			"provider_contract", "internal_contract",
+		},
+	}
 
-	if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
-		t.Fatal("Decode() accepted a non-PASS verification")
+	total := 0
+
+	for state, reasons := range want {
+		total += len(reasons)
+
+		for _, reason := range reasons {
+			if got, known := verificationReasonState(reason); !known || got != state {
+				t.Fatalf("verificationReasonState(%q) = %q, %t, want %q", reason, got, known, state)
+			}
+		}
+	}
+
+	if count := 2 + len(verificationFailReasons) + len(verificationPermerrorReasons); count != total || total != 31 {
+		t.Fatalf("vocabulary has %d reasons, want the 31 OpenAPI reasons (%d listed)", count, total)
+	}
+
+	for _, reason := range []string{"too_many_signatures", "invalid_request", "duplicate_message_without_exploded", "NONE", ""} {
+		if _, known := verificationReasonState(reason); known {
+			t.Fatalf("verificationReasonState(%q) is known", reason)
+		}
 	}
 }
 
-// TestDraft07PassReasonVocabularyAcceptsNewReasonToken keeps the canonical reason token check open for Draft-07 reasons.
-func TestDraft07PassReasonVocabularyAcceptsNewReasonToken(t *testing.T) {
-	response := readProducerResponse(t, draft07SingleHopFixture)
-	response.Verification.PrimaryReason = "from_not_authentic"
+// TestDraft08PassRequiresReasonNone rejects PASS projections whose reason Draft-08 assigns to another state.
+func TestDraft08PassRequiresReasonNone(t *testing.T) {
+	reasons := []string{
+		"from_not_authentic", "custody_mismatch", "body_history_unavailable", "timestamp_invalid",
+		"envelope_mismatch", "domain_alignment_mismatch", "next_domain_mismatch", "out_of_band_required",
+		"invalid_recipe", "provider_temporary", "too_many_signatures", "protocol_pass",
+	}
+	for _, reason := range reasons {
+		t.Run(reason, func(t *testing.T) {
+			response := readProducerResponse(t, draft08SingleHopFixture)
+			response.Verification.PrimaryReason = reason
+			response.Authentication.PrimaryReason = reason
 
-	if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err != nil {
-		t.Fatalf("Decode() rejected the Draft-07 reason token: %v", err)
+			if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
+				t.Fatalf("Decode() accepted PASS with reason %q", reason)
+			}
+		})
 	}
 }
 
-// TestDraft06InputFailsClosed rejects every Draft-06 contract element under the Draft-07 decoder.
-func TestDraft06InputFailsClosed(t *testing.T) {
+// TestDraft08NonPassVerificationFailsClosed keeps coherent Draft-08 failures out of composition.
+func TestDraft08NonPassVerificationFailsClosed(t *testing.T) {
+	for _, tc := range []struct{ state, reason string }{
+		{"FAIL", "from_not_authentic"}, {"FAIL", "custody_mismatch"}, {"FAIL", "body_history_unavailable"},
+		{"FAIL", "timestamp_invalid"}, {"PERMERROR", "invalid_recipe"}, {"TEMPERROR", "provider_temporary"},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			response := readProducerResponse(t, draft08SingleHopFixture)
+			response.Verification.State, response.Verification.PrimaryReason = tc.state, tc.reason
+			response.Authentication.State, response.Authentication.PrimaryReason = tc.state, tc.reason
+			response.Replay.Class = "not_checked"
+
+			if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
+				t.Fatal("Decode() accepted a non-PASS verification")
+			}
+		})
+	}
+}
+
+// TestDraft08AuthenticationCoherence mirrors the producer's replay-dependent authentication invariant.
+func TestDraft08AuthenticationCoherence(t *testing.T) {
+	for _, tc := range []struct {
+		replay, state, reason string
+		valid                 bool
+	}{
+		{"first_seen", "PASS", "none", true},
+		{"not_checked", "PASS", "none", true},
+		{"disabled", "PASS", "none", true},
+		{"exploded", "PASS", "none", true},
+		{"replayed", "FAIL", "duplicate_message_without_exploded", true},
+		{"indeterminate", "TEMPERROR", "replay_indeterminate", true},
+		{"indeterminate", "TEMPERROR", "replay_evidence_unavailable", true},
+		{"first_seen", "FAIL", "custody_mismatch", false},
+		{"first_seen", "PERMERROR", "invalid_recipe", false},
+		{"first_seen", "PASS", "duplicate_message_without_exploded", false},
+		{"replayed", "PASS", "none", false},
+		{"replayed", "FAIL", "replay_indeterminate", false},
+		{"indeterminate", "PASS", "none", false},
+		{"indeterminate", "FAIL", "replay_indeterminate", false},
+		{"indeterminate", "TEMPERROR", "provider_temporary", false},
+	} {
+		t.Run(tc.replay+"/"+tc.state+"/"+tc.reason, func(t *testing.T) {
+			response := readProducerResponse(t, draft08SingleHopFixture)
+			response.Replay.Class = tc.replay
+			response.Authentication.State, response.Authentication.PrimaryReason = tc.state, tc.reason
+
+			_, err := Decode(producerRequest(t, response, producerRequestOptions{}))
+			if (err == nil) != tc.valid {
+				t.Fatalf("Decode() error = %v, want valid %t", err, tc.valid)
+			}
+		})
+	}
+}
+
+// TestOlderDraftInputFailsClosed rejects every Draft-06 and Draft-07 contract element under the Draft-08 decoder.
+func TestOlderDraftInputFailsClosed(t *testing.T) {
 	legacyFacts := func(t *testing.T) []pluginapi.DecisionFactView {
 		t.Helper()
 
@@ -204,6 +346,9 @@ func TestDraft06InputFailsClosed(t *testing.T) {
 		name    string
 		options func(*testing.T) producerRequestOptions
 	}{
+		{name: "Draft-07 literal", options: func(*testing.T) producerRequestOptions {
+			return producerRequestOptions{stringOverrides: map[string]string{"resource.dkim2.draft": "draft-ietf-dkim-dkim2-spec-07"}}
+		}},
 		{name: "Draft-06 literal", options: func(*testing.T) producerRequestOptions {
 			return producerRequestOptions{stringOverrides: map[string]string{"resource.dkim2.draft": "draft-ietf-dkim-dkim2-spec-06"}}
 		}},
@@ -223,40 +368,69 @@ func TestDraft06InputFailsClosed(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			response := readProducerResponse(t, draft07TwoHopFixture)
+			response := readProducerResponse(t, draft08TwoHopFixture)
 			if _, err := Decode(producerRequest(t, response, test.options(t))); err == nil {
-				t.Fatal("Decode() accepted Draft-06 input")
+				t.Fatal("Decode() accepted older-draft input")
 			}
 		})
 	}
 }
 
-// TestDraft06BindingsFailClosed rejects producer bindings that were computed with the Draft-06 hop encoding.
-func TestDraft06BindingsFailClosed(t *testing.T) {
-	response := readProducerResponse(t, draft07SingleHopFixture)
-
-	var legacy bindingGolden
-
-	payload, err := os.ReadFile(draft06BindingFixture)
-	if err != nil {
-		t.Fatal(err)
+// TestDraft07ProducerProjectionFailsClosed rejects a genuine Draft-07 projection: the same hop
+// with the Draft-07 literal and the Draft-07 producer golden's matching bindings.
+func TestDraft07ProducerProjectionFailsClosed(t *testing.T) {
+	legacy := readBindingGoldenFile(t, draft07BindingFixture)
+	if legacy.Draft != "draft-ietf-dkim-dkim2-spec-07" {
+		t.Fatalf("legacy golden draft = %q, want Draft-07", legacy.Draft)
 	}
 
-	if err = json.Unmarshal(payload, &legacy); err != nil {
-		t.Fatal(err)
-	}
-
+	response := readProducerResponse(t, draft08SingleHopFixture)
+	response.VerifierProjection.Draft = legacy.Draft
 	response.VerifierProjection.Binding = legacy.Expected.Projection
 	response.VerifierProjection.Hops[0]["hop_binding"] = json.RawMessage(strconv.Quote(legacy.Expected.BoundHop))
 
-	if _, err = Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
-		t.Fatal("Decode() accepted Draft-06 bindings relabeled as Draft-07")
+	if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
+		t.Fatal("Decode() accepted a Draft-07 projection")
+	}
+}
+
+// TestOlderDraftBindingsFailClosed rejects producer bindings computed under Draft-06 or Draft-07.
+func TestOlderDraftBindingsFailClosed(t *testing.T) {
+	for _, path := range []string{draft06BindingFixture, draft07BindingFixture} {
+		t.Run(path, func(t *testing.T) {
+			response := readProducerResponse(t, draft08SingleHopFixture)
+			legacy := readBindingGoldenFile(t, path)
+
+			response.VerifierProjection.Binding = legacy.Expected.Projection
+			response.VerifierProjection.Hops[0]["hop_binding"] = json.RawMessage(strconv.Quote(legacy.Expected.BoundHop))
+
+			if _, err := Decode(producerRequest(t, response, producerRequestOptions{})); err == nil {
+				t.Fatal("Decode() accepted older-draft bindings relabeled as Draft-08")
+			}
+
+			hops := producerHops(t, response)
+			if ValidProjectionBindings(producerBytes(t, json.RawMessage(strconv.Quote(legacy.Expected.Projection))), hops) {
+				t.Fatal("ValidProjectionBindings() accepted older-draft bindings")
+			}
+		})
+	}
+}
+
+// readBindingGoldenFile strictly decodes one producer binding vector.
+func readBindingGoldenFile(t *testing.T, path string) bindingGolden {
+	t.Helper()
+
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s) error = %v", path, err)
 	}
 
-	hops := producerHops(t, response)
-	if ValidProjectionBindings(producerBytes(t, json.RawMessage(strconv.Quote(legacy.Expected.Projection))), hops) {
-		t.Fatal("ValidProjectionBindings() accepted Draft-06 bindings")
+	var fixture bindingGolden
+	if err = json.Unmarshal(payload, &fixture); err != nil {
+		t.Fatalf("Unmarshal(%s) error = %v", path, err)
 	}
+
+	return fixture
 }
 
 // readProducerResponse strictly decodes one tracked dkim2d response fixture.
@@ -276,7 +450,7 @@ func readProducerResponse(t *testing.T, path string) producerResponse {
 	return response
 }
 
-// producerRequest maps a dkim2d response exactly like the Draft-07 Rspamd policy_attributes function.
+// producerRequest maps a dkim2d response exactly like the Draft-08 Rspamd policy_attributes function.
 func producerRequest(t *testing.T, response producerResponse, options producerRequestOptions) pluginapi.DecisionFactRequest {
 	t.Helper()
 
@@ -358,7 +532,7 @@ func producerEnvironmentFacts(t *testing.T) []pluginapi.DecisionFactView {
 func producerChain(t *testing.T, hops []map[string]json.RawMessage, options producerRequestOptions) pluginapi.DecisionValue {
 	t.Helper()
 
-	fields := append(append([]producerHopField(nil), draft07HopFields...), options.extraHopFields...)
+	fields := append(append([]producerHopField(nil), draft08HopFields...), options.extraHopFields...)
 	records := make([]pluginapi.DecisionRecord, 0, len(hops))
 
 	for _, hop := range hops {

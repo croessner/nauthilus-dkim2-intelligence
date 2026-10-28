@@ -1,4 +1,4 @@
-# Contract: dkim2.verifier-projection.v1 for draft-ietf-dkim-dkim2-spec-07 (Draft-06 input is rejected).
+# Contract: dkim2.verifier-projection.v1 for draft-ietf-dkim-dkim2-spec-08 (Draft-06 and Draft-07 input is rejected).
 # Strict reference Policy: thresholds and .example identities are illustrative operator settings.
 # Load the reputation, GeoIP and DKIM2 intelligence modules from go_plugin_dkim2_intelligence.yml.
 # All hard denies precede operator rules and permits. Use the separate observation target fragment while calibrating.

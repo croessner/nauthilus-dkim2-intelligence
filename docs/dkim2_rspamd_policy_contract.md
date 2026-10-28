@@ -9,8 +9,8 @@ use the exact target and projection identity below and reject unknown fields.
 - Policy API version: `1`
 - Target: `dkim2/accept-message-instance`
 - Projection: `dkim2.verifier-projection.v1`
-- DKIM2 draft: `draft-ietf-dkim-dkim2-spec-07` (exact literal; Draft-06 input
-  is rejected)
+- DKIM2 draft: `draft-ietf-dkim-dkim2-spec-08` (exact literal; Draft-06 and
+  Draft-07 input is rejected)
 - Canonical Policy-Basic username: `rspamd-verifier`
 - One unary request per applicable Rspamd scan
 - No `subject` object until an independently authenticated policy subject is
@@ -107,7 +107,7 @@ already nested below `resource.attributes`.
 | `resource.dkim2.projection_binding_algorithm` | string enum | Fixed to `sha-256` in v1. |
 | `resource.dkim2.projection_binding` | 32-byte value | Digest of the complete canonical projection, used for coherence and provider correlation. |
 | `resource.dkim2.verification_state` | enum | Immutable verifier state: `PASS`, `FAIL`, `PERMERROR`, or `TEMPERROR`. |
-| `resource.dkim2.verification_reason` | canonical token | Verifier-owned primary reason (Draft-07 adds `from_not_authentic`); the plugin checks token syntax only, because a projection exists only for `PASS`. |
+| `resource.dkim2.verification_reason` | closed enum | Verifier-owned primary reason from the `dkim2d` OpenAPI `VerificationReason` enum. Draft-08 Section 14.1 gives every reason exactly one state: `PASS` carries only `none`; `FAIL` is `hash_mismatch`, `signature_mismatch`, `timestamp_invalid`, `envelope_mismatch`, `domain_alignment_mismatch`, `next_domain_mismatch`, `custody_mismatch`, `out_of_band_required`, `from_not_authentic`, or `body_history_unavailable`; `TEMPERROR` is only `provider_temporary`; every other reason, including `invalid_recipe`, is `PERMERROR`. Draft-08 removed `too_many_signatures`. Because a projection exists only for `PASS`, the plugin admits only `none`; a reason whose state differs from `verification_state` is rejected. |
 | `resource.dkim2.scope` | enum | `current` or `chain`. |
 | `resource.dkim2.historical_content` | enum | `not_evaluated`, `complete`, or `partial`. |
 | `resource.dkim2.historical_signatures` | enum | `not_evaluated` or `complete`. |
@@ -116,13 +116,13 @@ already nested below `resource.attributes`.
 | `resource.dkim2.target_message_instance` | positive integer | Selected Message-Instance number. |
 | `resource.dkim2.claimed_hop_count` | bounded positive integer | Number of records claimed in the complete chain. It must match the chain and target coherence rules. |
 | `resource.dkim2.authentication_state` | enum | Final DKIM2 authentication state after replay processing. |
-| `resource.dkim2.authentication_reason` | closed enum | Final authentication reason, including replay-specific reasons. |
-| `resource.dkim2.replay_class` | enum | `not_checked`, `not_eligible`, `disabled`, `first_seen`, `exploded`, `replayed`, or `indeterminate`. `not_eligible` (Draft-07) means PASS with only the originator's `i=1` signature, so replay counting does not apply. |
+| `resource.dkim2.authentication_reason` | closed enum | Final authentication reason. With replay class `replayed` the result is `FAIL` `duplicate_message_without_exploded`; with `indeterminate` it is `TEMPERROR` `replay_indeterminate` or `replay_evidence_unavailable`; every other replay class repeats `verification_state` and `verification_reason` unchanged. Any other combination is rejected. |
+| `resource.dkim2.replay_class` | enum | `not_checked`, `not_eligible`, `disabled`, `first_seen`, `exploded`, `replayed`, or `indeterminate`. `not_eligible` means PASS with only the originator's `i=1` signature, so replay counting does not apply. |
 | `resource.dkim2.local_policy_mode` | enum | DKIM2 daemon policy mode: `strict`, `permissive`, or `testing`. |
 | `resource.dkim2.local_policy_verdict` | enum | Daemon-local `accept`, `continue`, `reject`, or `tempfail`. |
 | `resource.dkim2.local_policy_reason` | closed enum | Daemon-local primary policy reason. |
 | `resource.dkim2.disposition` | enum | Closed disposition already selected by `dkim2d`; Nauthilus cannot widen it. |
-| `resource.dkim2.received_dsn_propagation` | closed enum, optional | Propagation class of a received delivery-status notification: `not_applicable`, `eligible`, `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `unsupported_chain`, `not_reconstructable`, or `not_evaluated`. The verifier sends it only for notifications that carry a received-DSN projection, so the fact is not required. |
+| `resource.dkim2.received_dsn_propagation` | closed enum, optional | Propagation class of a received delivery-status notification: `not_applicable`, `eligible`, `terminal_origin`, `not_failure`, `forbidden_null_previous_sender`, `forbidden_identity_misaligned` (Draft-08 Section 16.3: the completion `d=` does not relaxed-match the previous hop's `rt=`), `unsupported_chain`, `not_reconstructable`, or `not_evaluated`. The `dkim2d` `/v1/dsn/sign` unsigned reasons (`X-DKIM2-Unsigned-Reason`) are not part of the projection and are rejected here. The verifier sends it only for notifications that carry a received-DSN projection, so the fact is not required. |
 
 Draft-07 removed `donotmodify`/`donotexplode` (Section 10.10) and the DNS
 `t=` testing tag, so the Draft-06 facts `resource.dkim2.do_not_modify_state`,
@@ -189,15 +189,17 @@ are an 8-byte count followed by length-prefixed members.
   `change_count`, `affected_header_count`, `history_header_state`,
   `history_body_state`, `body_availability`.
 - Projection binding: SHA-256 of `"dkim2-verifier-projection-binding-v1"`,
-  `"dkim2.verifier-projection.v1"`, `"draft-ietf-dkim-dkim2-spec-07"`, hop
+  `"dkim2.verifier-projection.v1"`, `"draft-ietf-dkim-dkim2-spec-08"`, hop
   count, then every hop content digest in order.
 - Hop binding: SHA-256 of `"dkim2-verifier-bound-hop-v1"`, the projection
   binding, `sequence`, and the hop content digest.
 
 Draft-06 framed five flag bytes (`do_not_modify`, `do_not_explode`, `feedback`,
-`feed_here`, `exploded`) and the Draft-06 literal, so every Draft-06 binding
-differs and never validates. The encoding is proven against the real `dkim2d`
-Draft-07 two-hop response in `projection/testdata`.
+`feed_here`, `exploded`) and the Draft-06 literal; Draft-07 framed the Draft-07
+literal. The Draft-08 frame layout is unchanged from Draft-07, but the framed
+literal differs, so every older binding differs and never validates. The
+encoding is proven against real `dkim2d` Draft-08 projections (two-hop,
+single-hop, and ML-DSA-44 single-hop) in `projection/testdata`.
 
 Selector and key fingerprint are deliberately omitted from v1. DKIM2 permits
 multiple signature sets per hop; one scalar selector/fingerprint would either
@@ -283,8 +285,10 @@ locale collation, case folding, and producer insertion order are not canonical
 ordering rules.
 
 - `resource.dkim2.chain`: at most 128 records;
-- `signature_algorithms`: sorted unique subset of `rsa-sha256`, `rsa-sha512`,
-  `ed25519-sha256`, and `ed25519-sha512`, at most four values;
+- `signature_algorithms`: sorted unique subset of `ed25519-sha256`,
+  `ed25519-sha512`, `mldsa44` (Draft-08 Section 3.4 pure ML-DSA-44),
+  `rsa-sha256`, and `rsa-sha512`, at most four values; the removed Draft-07
+  composite `mldsa44-ed25519-sha512` is rejected;
 - `normalized_signals`: sorted unique schema-owned values, at most 20;
 - `affected_headers`: sorted unique lower-case field names, at most 128 values
   of at most 64 bytes each;

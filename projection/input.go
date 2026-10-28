@@ -25,9 +25,15 @@ const (
 	factReceivedDSN         = "resource.dkim2.received_dsn_propagation"
 	verdictTempfail         = "tempfail"
 	verificationPass        = "PASS"
+	verificationFail        = "FAIL"
+	verificationPermerror   = "PERMERROR"
+	verificationTemperror   = "TEMPERROR"
+	reasonNone              = "none"
+	outOfBandRequired       = "out_of_band_required"
+	replayReplayed          = "replayed"
 
 	ProjectionSchema         = "dkim2.verifier-projection.v1"
-	DraftVersion             = "draft-ietf-dkim-dkim2-spec-07"
+	DraftVersion             = "draft-ietf-dkim-dkim2-spec-08"
 	maximumHops              = 128
 	FactProjectionSchema     = "resource.dkim2.projection_schema"
 	factDraft                = "resource.dkim2.draft"
@@ -85,9 +91,43 @@ var historicalSignatureStates = []string{StateNotEvaluated, stateComplete}
 
 var custodyStructures = []string{StateNotEvaluated, custodyNotPresent, CustodyLinksEvaluated, CustodyTerminalRequires}
 
-// replayClasses is the closed Draft-07 replay vocabulary; not_eligible marks an
-// originator-only PASS for which replay counting does not apply.
-var replayClasses = []string{"not_checked", "not_eligible", "disabled", "first_seen", stateExploded, "replayed", StateIndeterminate}
+// replayClasses is the closed Draft-08 replay vocabulary; not_eligible marks an
+// originator-only PASS for which Section 15.1 replay counting does not apply.
+var replayClasses = []string{"not_checked", "not_eligible", "disabled", "first_seen", stateExploded, replayReplayed, StateIndeterminate}
+
+// Draft-08 Section 14.1 assigns every verification reason exactly one state.
+// The lists mirror the dkim2d OpenAPI VerificationReason enum and the producer's
+// single owner policy.ProtocolForVerificationReason: PASS carries only none,
+// TEMPERROR only provider_temporary, and every other known reason is FAIL or
+// PERMERROR. Draft-08 removed too_many_signatures, so it is unknown here.
+var (
+	verificationFailReasons = []string{
+		"hash_mismatch", "signature_mismatch", "timestamp_invalid", "envelope_mismatch",
+		"domain_alignment_mismatch", "next_domain_mismatch", "custody_mismatch",
+		outOfBandRequired, "from_not_authentic", "body_history_unavailable",
+	}
+	verificationPermerrorReasons = []string{
+		"limit_exceeded", "malformed_message", "malformed_protocol", "duplicate_hash_algorithm",
+		"invalid_recipe_json", "invalid_recipe", "duplicate_selector", "missing_protocol",
+		"sequence_invalid", "unsupported_algorithm", "missing_key", "invalid_key", "ambiguous_key",
+		"revoked_key", "unsupported_key_type", "key_algorithm_mismatch", "provider_permanent",
+		"provider_contract", "internal_contract",
+	}
+)
+
+// verificationStates is the closed Draft-08 Section 14.1 state vocabulary.
+var verificationStates = []string{verificationPass, verificationFail, verificationPermerror, verificationTemperror}
+
+// replayIndeterminateReasons are the only authentication reasons of an indeterminate replay check.
+var replayIndeterminateReasons = []string{"replay_indeterminate", "replay_evidence_unavailable"}
+
+// receivedDSNPropagations is the closed Draft-08 delivery-status propagation vocabulary;
+// forbidden_identity_misaligned marks a Section 16.3 completion d= that does not
+// relaxed-match the previous hop's rt=.
+var receivedDSNPropagations = []string{
+	"not_applicable", "eligible", "terminal_origin", "not_failure", "forbidden_null_previous_sender",
+	"forbidden_identity_misaligned", "unsupported_chain", "not_reconstructable", "not_evaluated",
+}
 
 // RspamdScanActions lists the closed pre-Policy scan action vocabulary.
 var RspamdScanActions = []string{
@@ -216,8 +256,7 @@ func validateOptionalReceivedDSN(facts map[string]pluginapi.DecisionFactView) er
 		return err
 	}
 
-	_, err := requireStringIn(facts, factReceivedDSN, "not_applicable", "eligible", "terminal_origin", "not_failure",
-		"forbidden_null_previous_sender", "unsupported_chain", "not_reconstructable", "not_evaluated")
+	_, err := requireStringIn(facts, factReceivedDSN, receivedDSNPropagations...)
 
 	return err
 }
@@ -298,14 +337,83 @@ func validateAggregateFacts(facts map[string]pluginapi.DecisionFactView) error {
 		return err
 	}
 
-	for _, id := range []string{factAuthenticationReason, factLocalPolicyReason} {
-		if _, err := requireToken(facts, id); err != nil {
-			return err
-		}
+	if _, err := requireToken(facts, factLocalPolicyReason); err != nil {
+		return err
 	}
 
-	if _, err := requireToken(facts, "resource.dkim2.verification_reason"); err != nil {
+	return validateReasonCoherence(facts)
+}
+
+// verificationReasonState returns the one Draft-08 Section 14.1 state of a known verification reason.
+func verificationReasonState(reason string) (string, bool) {
+	switch {
+	case reason == reasonNone:
+		return verificationPass, true
+	case reason == "provider_temporary":
+		return verificationTemperror, true
+	case slices.Contains(verificationFailReasons, reason):
+		return verificationFail, true
+	case slices.Contains(verificationPermerrorReasons, reason):
+		return verificationPermerror, true
+	default:
+		return "", false
+	}
+}
+
+// validateReasonCoherence binds the verification and authentication reasons to their states.
+// Verification follows Draft-08 Section 14.1. Authentication mirrors the producer's
+// AuthenticationResult invariant: a replayed message is FAIL
+// duplicate_message_without_exploded, an indeterminate replay check is TEMPERROR
+// with a replay reason, and every other replay class repeats the verification
+// state and reason unchanged.
+func validateReasonCoherence(facts map[string]pluginapi.DecisionFactView) error {
+	verificationState, err := requireStringIn(facts, factVerificationState, verificationStates...)
+	if err != nil {
 		return err
+	}
+
+	verificationReason, err := requireString(facts, "resource.dkim2.verification_reason")
+	if err != nil {
+		return err
+	}
+
+	if state, known := verificationReasonState(verificationReason); !known || state != verificationState {
+		return fmt.Errorf("verification reason does not match the Draft-08 verification state")
+	}
+
+	return validateAuthenticationCoherence(facts, verificationState, verificationReason)
+}
+
+// validateAuthenticationCoherence binds the final authentication result to the replay class and verification result.
+func validateAuthenticationCoherence(facts map[string]pluginapi.DecisionFactView, verificationState, verificationReason string) error {
+	authenticationState, err := requireStringIn(facts, factAuthenticationState, verificationStates...)
+	if err != nil {
+		return err
+	}
+
+	authenticationReason, err := requireString(facts, factAuthenticationReason)
+	if err != nil {
+		return err
+	}
+
+	replay, err := requireStringIn(facts, factReplayClass, replayClasses...)
+	if err != nil {
+		return err
+	}
+
+	switch replay {
+	case replayReplayed:
+		if authenticationState != verificationFail || authenticationReason != "duplicate_message_without_exploded" {
+			return fmt.Errorf("replayed authentication must be FAIL duplicate_message_without_exploded")
+		}
+	case StateIndeterminate:
+		if authenticationState != verificationTemperror || !slices.Contains(replayIndeterminateReasons, authenticationReason) {
+			return fmt.Errorf("indeterminate replay authentication must be TEMPERROR with a replay reason")
+		}
+	default:
+		if authenticationState != verificationState || authenticationReason != verificationReason {
+			return fmt.Errorf("authentication state and reason must repeat the verification result")
+		}
 	}
 
 	return nil
@@ -350,12 +458,12 @@ func decodeAggregateValues(facts map[string]pluginapi.DecisionFactView) (Project
 		allowed     []string
 	}{
 		{&projection.VerificationState, factVerificationState, []string{verificationPass}},
-		{&projection.AuthenticationState, factAuthenticationState, []string{verificationPass, "FAIL", "PERMERROR", "TEMPERROR"}},
+		{&projection.AuthenticationState, factAuthenticationState, verificationStates},
 		{&projection.Scope, FactScope, projectionScopes},
 		{&projection.HistoricalContent, FactHistoricalContent, historicalContentStates},
 		{&projection.HistoricalSignatures, FactHistoricalSignatures, historicalSignatureStates},
 		{&projection.CustodyStructure, FactCustodyStructure, custodyStructures},
-		{&projection.Disposition, factDisposition, []string{VerdictAccept, VerdictContinue, verdictReject, verdictTempfail, "out_of_band_required"}},
+		{&projection.Disposition, factDisposition, []string{VerdictAccept, VerdictContinue, verdictReject, verdictTempfail, outOfBandRequired}},
 	}
 	for _, specification := range specifications {
 		value, err := requireStringIn(facts, specification.id, specification.allowed...)
@@ -1086,9 +1194,14 @@ func AllowedChangeClass(value string) bool {
 	return value == "body.rewrite" || value == "header.rewrite"
 }
 
+// signatureAlgorithms is the closed v1 hop algorithm vocabulary of the dkim2d
+// OpenAPI VerifierHop.signature_algorithms enum. Draft-08 Section 3.4 adds pure
+// ML-DSA-44 (mldsa44); the removed Draft-07 composite mldsa44-ed25519-sha512 is unknown.
+var signatureAlgorithms = []string{"ed25519-sha256", "ed25519-sha512", "mldsa44", "rsa-sha256", "rsa-sha512"}
+
 // allowedSignatureAlgorithm reports the v1 authenticated algorithm vocabulary.
 func allowedSignatureAlgorithm(value string) bool {
-	return slices.Contains([]string{"ed25519-sha256", "ed25519-sha512", "rsa-sha256", "rsa-sha512"}, value)
+	return slices.Contains(signatureAlgorithms, value)
 }
 
 // allowedRspamdSignal reports the v1 normalized signal vocabulary.
