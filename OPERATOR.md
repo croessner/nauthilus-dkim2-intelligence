@@ -40,6 +40,56 @@ If a core image still bundles its own copy at the same path, the mount
 replaces it; the checksum and signer pin make sure the intended artifact is
 loaded. Never relax `verification_policy: signature_required` to proceed.
 
+## DKIM2 Draft-09 contract (plugin 0.4.0)
+
+The plugin implements `draft-ietf-dkim-dkim2-spec-09` only. It must be rolled
+out in the same maintenance window as the mailstack Draft-09 Rspamd DKIM2
+adapter and `dkim2d` v0.3.0 (the first Draft-09 release), directly after the
+daemon. A Draft-08, Draft-07 or Draft-06 request (draft literal or bindings)
+is rejected with `invalid_input` and no facts, which the core reports as
+`indeterminate` with status `provider_unavailable`, exactly as described for
+Draft-07 below. Roll back the plugin together with the daemon and the adapter.
+
+What changed on the wire:
+
+- `resource.dkim2.draft` is `draft-ietf-dkim-dkim2-spec-09`. The projection
+  binding frames the draft literal, so every Draft-08 binding value differs;
+  the frame layout and the record fields are unchanged (21 hop fields).
+- `resource.dkim2.verification_reason` and
+  `resource.dkim2.authentication_reason` stay closed vocabularies bound to
+  their states (Draft-09 Section 14.1, mirrored from the producer's
+  `ProtocolForVerificationReason`). New reasons: `from_subdomain_forbidden`
+  (FAIL: the From domain's Domain Policy Record carries `f=strict` and only a
+  subdomain `d=` signed), `domain_policy_temporary` (TEMPERROR),
+  `domain_policy_ambiguous` and `domain_policy_invalid` (PERMERROR).
+  `body_history_unavailable` (null body Recipe) moved from FAIL to PERMERROR.
+  A projection still exists only for verification PASS with reason `none`;
+  the authentication rules (repeat the verification result, except replay
+  `replayed` and `indeterminate`) are unchanged.
+- Draft-09 adds the verification state NONE (neither a Message-Instance nor a
+  DKIM2-Signature field). It never reaches the plugin: the Rspamd adapter
+  classifies such messages locally and calls neither `dkim2d` nor Nauthilus,
+  and a NONE response from `dkim2d` carries no verifier projection, so the
+  adapter maps no Policy facts for it. The plugin therefore rejects NONE as
+  verification or authentication state, and it rejects
+  `resource.dkim2.local_policy_reason` `none`, which `dkim2d` emits only for
+  NONE.
+- Hop algorithms and the received-DSN propagation vocabulary are unchanged.
+
+The plugin output (`assessed_chain`, `smtp_peer`, `assessment_complete`) is
+unchanged.
+
+### Required production configuration changes
+
+None for the Policy document: the reference
+`examples/policy_dkim2_rspamd_verifier.yml` keeps its schemas, allowlist and
+rules (every non-PASS verification or authentication result, including the
+new reasons and NONE, is denied by `deny_nonpass_verifier_state` or
+`deny_nonpass_authentication`; the new reasons fit the existing
+`max_length: 64`). Update `config.d/55-go-plugins.yml` (`checksum` of the new
+artifact) and roll out the plugin, the mailstack Draft-09 Rspamd adapter and
+`dkim2d` v0.3.0 together; a mixed Draft-08/Draft-09 deployment fails closed.
+
 ## DKIM2 Draft-08 contract (plugin 0.3.0)
 
 The plugin implements `draft-ietf-dkim-dkim2-spec-08` only. It must be rolled

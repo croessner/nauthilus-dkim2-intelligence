@@ -43,7 +43,7 @@ type bindingGolden struct {
 	} `json:"expected"`
 }
 
-// TestBindingMatchesDKIM2ProducerGolden recomputes the Draft-08 producer vector byte for byte.
+// TestBindingMatchesDKIM2ProducerGolden recomputes the Draft-09 producer vector byte for byte.
 // The golden is a verbatim copy of the dkim2 testdata/reference/verifier-projection-v1-binding.json.
 func TestBindingMatchesDKIM2ProducerGolden(t *testing.T) {
 	fixture := readBindingGolden(t)

@@ -14,9 +14,9 @@ import (
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-// TestVerifierProjectionAcceptsExactDraft08ReplayClasses pins the closed Draft-08 replay vocabulary,
+// TestVerifierProjectionAcceptsExactDraft09ReplayClasses pins the closed Draft-09 replay vocabulary,
 // each with the authentication result the producer pairs with that class.
-func TestVerifierProjectionAcceptsExactDraft08ReplayClasses(t *testing.T) {
+func TestVerifierProjectionAcceptsExactDraft09ReplayClasses(t *testing.T) {
 	want := []string{"not_checked", "not_eligible", "disabled", "first_seen", "exploded", "replayed", "indeterminate"}
 	if !slices.Equal(replayClasses, want) {
 		t.Fatalf("replayClasses = %v, want %v", replayClasses, want)
@@ -42,7 +42,7 @@ func TestVerifierProjectionAcceptsExactDraft08ReplayClasses(t *testing.T) {
 	}
 }
 
-// TestVerifierProjectionRejectsUnknownReplayClass fails closed on replay classes outside Draft-08.
+// TestVerifierProjectionRejectsUnknownReplayClass fails closed on replay classes outside Draft-09.
 func TestVerifierProjectionRejectsUnknownReplayClass(t *testing.T) {
 	for _, class := range []string{"eligible", "NOT_ELIGIBLE", ""} {
 		request := replaceRequestStringFact(t, testDecisionRequest(t, "192.0.2.25"), "resource.dkim2.replay_class", class)

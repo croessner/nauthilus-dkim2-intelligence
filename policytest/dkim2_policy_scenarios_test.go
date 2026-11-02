@@ -56,7 +56,7 @@ func TestDKIM2CorrelatedPolicyScenarios(t *testing.T) {
 }
 
 // dkim2PolicyCases fixes positive, same-hop, current-target, availability and invariant precedence vectors
-// for the Draft-08 verifier contract, including the non-replay not_eligible class and coherent Draft-08
+// for the Draft-09 verifier contract, including the non-replay not_eligible class and coherent Draft-09
 // Section 14.1 verification and replay authentication results.
 func dkim2PolicyCases() []dkim2PolicyCase {
 	no := false
@@ -95,24 +95,28 @@ func dkim2PolicyCases() []dkim2PolicyCase {
 		result = append(result, dkim2PolicyCase{name: tc.rule, facts: map[string]any{"resource.dkim2." + tc.fact: tc.value}, wantRule: tc.rule})
 	}
 
-	result = append(result, dkim2Draft08ResultCases()...)
+	result = append(result, dkim2Draft09ResultCases()...)
 
 	return result
 }
 
-// dkim2Draft08ResultCases pairs each Draft-08 state with a reason the producer reports for it.
-// Verification failures carry the same authentication result and an unchecked replay class;
-// replay failures keep a PASS verification. Every non-PASS result must be denied.
-func dkim2Draft08ResultCases() []dkim2PolicyCase {
+// dkim2Draft09ResultCases pairs each Draft-09 state with a reason the producer reports for it, including
+// the Draft-09 Domain Policy Record reasons and the null body Recipe moved to PERMERROR. Verification
+// failures carry the same authentication result and an unchecked replay class; replay failures keep a
+// PASS verification. Every non-PASS result must be denied, and so must the projection-less NONE state
+// should it ever reach Policy despite the plugin rejecting it.
+func dkim2Draft09ResultCases() []dkim2PolicyCase {
 	result := []dkim2PolicyCase{}
 
 	for _, tc := range []struct{ state, reason string }{
-		{"FAIL", "custody_mismatch"}, {"FAIL", "body_history_unavailable"}, {"FAIL", "from_not_authentic"},
+		{"FAIL", "custody_mismatch"}, {"FAIL", "from_not_authentic"}, {"FAIL", "from_subdomain_forbidden"},
 		{"FAIL", "timestamp_invalid"}, {"FAIL", "out_of_band_required"}, {"PERMERROR", "invalid_recipe"},
-		{"TEMPERROR", "provider_temporary"},
+		{"PERMERROR", "body_history_unavailable"}, {"PERMERROR", "domain_policy_ambiguous"},
+		{"PERMERROR", "domain_policy_invalid"}, {"TEMPERROR", "provider_temporary"},
+		{"TEMPERROR", "domain_policy_temporary"},
 	} {
 		result = append(result, dkim2PolicyCase{
-			name: "Draft-08 verification " + tc.state + " " + tc.reason,
+			name: "Draft-09 verification " + tc.state + " " + tc.reason,
 			facts: map[string]any{
 				"resource.dkim2.verification_state": tc.state, "resource.dkim2.verification_reason": tc.reason,
 				"resource.dkim2.authentication_state": tc.state, "resource.dkim2.authentication_reason": tc.reason,
@@ -122,13 +126,23 @@ func dkim2Draft08ResultCases() []dkim2PolicyCase {
 		})
 	}
 
+	result = append(result, dkim2PolicyCase{
+		name: "Draft-09 NONE state",
+		facts: map[string]any{
+			"resource.dkim2.verification_state": "NONE", "resource.dkim2.verification_reason": "none",
+			"resource.dkim2.authentication_state": "NONE", "resource.dkim2.authentication_reason": "none",
+			"resource.dkim2.replay_class": "not_checked", "resource.dkim2.local_policy_reason": "none",
+		},
+		wantRule: "deny_nonpass_verifier_state",
+	})
+
 	for _, tc := range []struct{ replay, state, reason string }{
 		{"replayed", "FAIL", "duplicate_message_without_exploded"},
 		{"indeterminate", "TEMPERROR", "replay_indeterminate"},
 		{"indeterminate", "TEMPERROR", "replay_evidence_unavailable"},
 	} {
 		result = append(result, dkim2PolicyCase{
-			name: "Draft-08 replay " + tc.replay + " " + tc.reason,
+			name: "Draft-09 replay " + tc.replay + " " + tc.reason,
 			facts: map[string]any{
 				"resource.dkim2.replay_class": tc.replay, "resource.dkim2.authentication_state": tc.state,
 				"resource.dkim2.authentication_reason": tc.reason,

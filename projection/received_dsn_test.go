@@ -7,7 +7,7 @@ import (
 	pluginapi "github.com/croessner/nauthilus/v4/pluginapi/v1"
 )
 
-// TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation admits exactly the Draft-08 propagation vocabulary;
+// TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation admits exactly the Draft-09 propagation vocabulary (unchanged since Draft-08);
 // the dkim2d /v1/dsn/sign unsigned reasons are a REST header, never a projection value.
 func TestVerifierProjectionAcceptsOnlyDeclaredOptionalDSNPropagation(t *testing.T) {
 	want := []string{
